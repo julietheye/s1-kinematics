@@ -1,6 +1,6 @@
 # S1 kinematic encoding analysis
 
-This repository contains analysis code relevant to the manuscript "Area 2 of primary somatosensory cortex encodes kinematics of the whole arm", which can be found [here](https://www.biorxiv.org/content/10.1101/643205v2).
+This repository contains analysis code relevant to the manuscript "Area 2 of primary somatosensory cortex encodes kinematics of the whole arm", which can be found [here](https://doi.org/10.7554/eLife.48198).
 
 ## Execution instructions
 
