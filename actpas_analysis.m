@@ -290,10 +290,12 @@
     for muscleNum=1:length(muscleArray)
         
         muscle = muscleArray(muscleNum);
-        model_aliases = {'muscLin','muscNonlin'};
-        models_to_plot = {neural_signals,'muscLin','muscNonlin'};
-        model_titles = {'Actual Firing','Muscle Linear','Muscle Nonlinear'};
-
+%         model_aliases = {'muscLin'};
+        model_aliases = {'muscNonlin'};
+%         models_to_plot = {neural_signals,'muscLin'};
+        models_to_plot = {neural_signals,'muscNonlin'};
+%         model_titles = {'Actual Firing','Muscle Linear'};
+        model_titles = {'Actual Firing','Muscle Nonlinear'};
 
         neuron_eval_cell =cell(length(trial_data_cell),1);
         fileclock = tic;
@@ -330,8 +332,8 @@
             
             %find l-naught for muscle length/velocity normalization
             listL0 = zeros(1,numel(td_trim));
+            muscleIndex = find(ismember(td_trim(1).muscle_names,muscleArray(muscleNum)));
             for t=1:numel(td_trim)
-                muscleIndex = find(ismember(td_trim(t).muscle_names,muscleArray(muscleNum)));
                 %for bump trials
                 if td_trim(t).ctrHoldBump==1
                     trialL0 = mean(td_trim(t).muscle_len(td_trim(t).idx_startTime:td_trim(t).idx_bumpTime,muscleIndex));
@@ -347,6 +349,18 @@
             getTDfields(td,'time');
             onetime_warn = warning('query','last'); 
             warning('off',onetime_warn.identifier)
+            
+            %normalize
+            muscleIndex = find(ismember(td_trim(1).muscle_names,muscleArray(muscleNum)));
+            for tr=1:numel(td)
+                td(tr).muscle_len(:,muscleNum) = td(tr).muscle_len(:,muscleNum)./L0;
+                td(tr).muscle_vel(:,muscleNum) = td(tr).muscle_vel(:,muscleNum)./L0;
+                
+                %nonlinearize if muscNonlin model
+                if strcmpi(model_aliases,'muscNonlin')
+                    td(tr).muscle_vel(:,muscleNum) = sign(td(tr).muscle_vel(:,muscleNum)).*(abs(td(tr).muscle_vel(:,muscleNum))).^0.5;
+                end
+            end
 
             sepResults = actpasSep(td,struct(...
                 'neural_signals',[arrayname '_FR'],...
@@ -430,7 +444,7 @@
             'do_nanmean',true));
         
         % save each muscle into 3d array
-        currentMuscleTable = table2array(avg_neuron_eval(:,5:19));
+        currentMuscleTable = table2array(avg_neuron_eval(:,5:12));
         allMuscAvgNeurEval = cat(3,allMuscAvgNeurEval,currentMuscleTable);
     end
     
@@ -454,8 +468,9 @@
     %'supraspinatus'(34), 'teres\_minor'(36)
     muscleArray = muscleArray1;
     muscleArray([1,2,7,11,12,16,17,20,22,27,30,31,32,33,34,36]) = [];
-    emgMuscAvgNeurEval = allMuscAvgNeurEval;
-    emgMuscAvgNeurEval(:,:,[1,2,7,11,12,16,17,20,22,27,30,31,32,33,34,36]) = [];
+%     emgMuscAvgNeurEval = allMuscAvgNeurEval;
+%     emgMuscAvgNeurEval(:,:,[1,2,7,11,12,16,17,20,22,27,30,31,32,33,34,36]) = [];
+    emgMuscAvgNeurEval = combinedTable;
     
     %KEEP THESE
 %     muscleArray = {'bicep_lh','bicep_sh','brachialis',...
@@ -585,71 +600,47 @@
 %     clear bests j check indexes addition muscleLabels x
 %     clear n
 
-%% bar plots of mean pR2
+%% hack-y way to get scatter plots from normalized models
+combinedTable = zeros(size(emgMuscAvgNeurEval,1),16,numel(muscleArray));
+j = 1;
+for i=1:8
+    combinedTable(:,j,:) = linearMuscleTable(:,i,:);
+    j=j+1;
+    combinedTable(:,j,:) = nonlinearMuscleTable(:,i,:);
+    j=j+1;
+end
 
-    muscleArray1 = {'abd\_poll\_longus','anconeus','bicep\_lh','bicep\_sh','brachialis',...
-    'brachioradialis','coracobrachialis','deltoid\_ant','deltoid\_med','deltoid\_pos',...
-    'dorsoepitrochlearis','ext\_carpi\_rad\_longus','ext\_carp\_rad\_brevis','ext\_carpi\_ulnaris',...
-    'ext\_digitorum','ext\_digiti','ext\_indicis','flex\_carpi\_radialis','flex\_carpi\_ulnaris',...
-    'flex\_digit\_profundus','flex\_digit\_superficialis','flex\_poll\_longus','infraspinatus',...
-    'lat\_dorsi\_sup','lat\_dorsi\_cen','lat\_dorsi\_inf','palmaris\_longus','pectoralis\_sup',...
-    'pectoralis\_inf','pronator\_quad','pronator\_teres','subscapularis','supinator',...
-    'supraspinatus','teres\_major','teres\_minor','tricep\_lat','tricep\_lon','tricep\_sho'};
 
-    %REMOVE non-emg muscles from allMuscAvgNeurEval
-    %'abd\_poll\_longus'(1), 'anconeus'(2), 'coracobrachialis'(7),...
-    %'dorsoepitrochlearis'(11), 'ext\_carpi\_rad\_longus'(12),...
-    %'ext\_digiti'(16), 'ext\_indicis'(17), 'flex\_digit\_profundus'(20),...
-    %'flex\_poll\_longus'(22), 'palmaris\_longus'(27), 'pronator\_quad'(30),...
-    %'pronator\_teres'(31), 'subscapularis'(32), 'supinator'(33),...
-    %'supraspinatus'(34), 'teres\_minor'(36)
-    muscleArray = muscleArray1;
-    muscleArray([1,2,7,11,12,16,17,20,22,27,30,31,32,33,34,36]) = [];
-%     emgMuscAvgNeurEval = allMuscAvgNeurEval;
-    emgMuscAvgNeurEval = emgMuscAvgNeurEval;
-%     emgMuscAvgNeurEval(:,:,[1,2,7,11,12,16,17,20,22,27,30,31,32,33,34,36]) = [];
+
+%% scatter plots of mean pR2
+
+    muscleArray = {'bicep_lh','bicep_sh','brachialis',...
+    'brachioradialis','deltoid_ant','deltoid_med','deltoid_pos',...
+    'ext_carp_rad_brevis','ext_carpi_ulnaris',...
+    'ext_digitorum','flex_carpi_radialis','flex_carpi_ulnaris',...
+    'flex_digit_superficialis','infraspinatus',...
+    'lat_dorsi_sup','lat_dorsi_cen','lat_dorsi_inf','pectoralis_sup',...
+    'pectoralis_inf',...
+    'teres_major','tricep_lat','tricep_lon','tricep_sho'};
     
-    %KEEP THESE
-%     muscleArray = {'bicep_lh','bicep_sh','brachialis',...
-%     'brachioradialis','deltoid_ant','deltoid_med','deltoid_pos',...
-%     'ext_carp_rad_brevis','ext_carpi_ulnaris',...
-%     'ext_digitorum','flex_carpi_radialis','flex_carpi_ulnaris',...
-%     'flex_digit_superficialis','infraspinatus',...
-%     'lat_dorsi_sup','lat_dorsi_cen','lat_dorsi_inf','pectoralis_sup',...
-%     'pectoralis_inf',...
-%     'teres_major','tricep_lat','tricep_lon','tricep_sho'};
+%     emgMuscAvgNeurEval = allMuscAvgNeurEval;
+%     emgMuscAvgNeurEval(:,:,[1,2,7,11,12,16,17,20,22,27,30,31,32,33,34,36]) = [];
+
+    emgMuscAvgNeurEval = combinedTable;
+
 
     %find numMuscles best muscles pR2 for each unit
-    numMuscles = 5;
+    numMuscles = 1;
+    
+    %pre-allocate arrays
+    linAct = zeros(1,numel(emgMuscAvgNeurEval(:,1,1)));
+    nonlinAct = zeros(1,numel(emgMuscAvgNeurEval(:,1,1)));
+    linPas = zeros(1,numel(emgMuscAvgNeurEval(:,1,1)));
+    nonlinPas = zeros(1,numel(emgMuscAvgNeurEval(:,1,1)));
+    unitMuscles = strings(numMuscles,numel(emgMuscAvgNeurEval(:,1,1)));
     
     %loop through each unit
-    k=0;
-    ind=0;
-    fig1 = figure('Name','Mean pR2 for units 1-15');
-    fig2 = figure('Name','Mean pR2 for units 16-30');
-    fig3 = figure('Name','Mean pR2 for units 31-45');
-    fig4 = figure('Name','Mean pR2 for units 46-53');
-    fig5 = figure('Name','Overall mean pR2 for all units');
-    overallMeans = zeros(4,numel(muscleArray));
     for n=1:numel(emgMuscAvgNeurEval(:,1,1))
-        k=k+1;
-        
-        if k<=15
-            set(0,'CurrentFigure',fig1)
-            subplot(3,5,k);
-        elseif k<=30
-            ind = k-15;
-            set(0,'CurrentFigure',fig2)
-            subplot(3,5,ind);
-        elseif k<=45
-            ind = k-30;
-            set(0,'CurrentFigure',fig3)
-            subplot(3,5,ind);
-        else 
-            ind = k-45;
-            set(0,'CurrentFigure',fig4)
-            subplot(2,5,ind);
-        end
         
         %find best muscles pR2 evaluated in act
         [maxLinAct, maxLinActInd] = maxk(emgMuscAvgNeurEval(n,3,:),numMuscles);
@@ -687,152 +678,90 @@
         bestMuscLinPas = reshape(permute(emgMuscAvgNeurEval(n,5,checkMuscles),[3,2,1]),[1,numMuscles]);
         bestMuscNonlinPas = reshape(permute(emgMuscAvgNeurEval(n,6,checkMuscles),[3,2,1]),[1,numMuscles]);
         
+        %save top muscles for unit
+        for c=1:numel(checkMuscles)
+            unitMuscles{c,n} = muscleArray{checkMuscles(1,c)};
+        end
+        
         %find mean of 5 best muscle group for each category
         meanLinAct = mean(bestMuscLinAct);
         meanNonlinAct = mean(bestMuscNonlinAct);
         meanLinPas = mean(bestMuscLinPas);
         meanNonlinPas = mean(bestMuscNonlinPas);
-        
-        %act vs pas
-        meanAct = (meanLinAct+meanNonlinAct)/2;
-        meanPas = (meanLinPas+meanNonlinPas)/2;
-        if meanPas>meanAct
-            x1 = categorical({'Active'});
-            y1 = [meanAct];
-            color1=[0,0,0];
-            x2 = categorical({'Passive'});
-            y2 = [meanPas];
-            color2=[1,0,0];
-        elseif meanAct>meanPas
-            x2 = categorical({'Active'});
-            y2 = [meanAct];
-            color2=[0,0,0];
-            x1 = categorical({'Passive'});
-            y1 = [meanPas];
-            color1=[1,0,0];
-        end
-        overallMeans(1,n) = meanAct;
-        overallMeans(2,n) = meanPas;
-        
-        %lin vs nonlin
-        meanLin = (meanLinAct+meanLinPas)/2;
-        meanNonlin = (meanNonlinAct+meanNonlinPas)/2;
-        if meanNonlin>meanLin
-            x3 = categorical({'Linear'});
-            y3 = [meanLin];
-            fill3=1;
-            x4 = categorical({'Nonlinear'});
-            y4 = [meanNonlin];
-            fill4=0.3;
-        elseif meanLin>meanNonlin
-            x4 = categorical({'Linear'});
-            y4 = [meanLin];
-            fill4=1;
-            x3 = categorical({'Nonlinear'});
-            y3 = [meanNonlin];
-            fill3=0.3;
-        end
-        overallMeans(3,n) = meanLin;
-        overallMeans(4,n) = meanNonlin;
-        
-        muscleLabels = strings(1,numMuscles);
-        for c=1:numel(checkMuscles)
-            muscleLabels{c} = muscleArray{checkMuscles(1,c)};
-        end
-        muscleLabels = categorical(muscleLabels);
-        
-        %plot active (black)
-        b1 = barh(x1,y1,'FaceColor',color1,'facealpha',1);
-        hold on
-        %plot passive (red)
-        b2 = barh(x2,y2,'FaceColor',color2,'facealpha',1);
-        %plot linear (dark maroon)
-        b3 = barh(x3,y3,'FaceColor',[0.4 0 0],'facealpha',fill3);
-        %plot nonlinear (light maroon)
-        b4 = barh(x4,y4,'FaceColor',[0.4 0 0],'facealpha',fill4);
-                
-        %axes and legend
-        xlabel(muscleLabels)
-%         xlim([-.5 0.5])
-%         set(gca,'XTick',-.5:0.25:0.5)
-        xlim([-20 0.5])
-        set(gca,'XTick',-20:5:0.5)
-        title(strcat('Unit ',string(n)));
-        sgtitle('Top muscles pR2 per unit');
-        suplabel('mean pR2');
+
+        %add this unit pR2 values to master lists
+        linAct(1,n) = meanLinAct;
+        nonlinAct(1,n) = meanNonlinAct;
+        linPas(1,n) = meanLinPas;
+        nonlinPas(1,n) = meanNonlinPas;
     end
     
-    %plot overall figure
-    set(0,'CurrentFigure',fig5)
-    %act vs pas
-    OverallAct = mean(overallMeans(1,:));
-    OverallPas = mean(overallMeans(2,:));
-    if OverallPas>OverallAct
-        xo1 = categorical({'Active'});
-        yo1 = [OverallAct];
-        coloro1=[0,0,0];
-        xo2 = categorical({'Passive'});
-        yo2 = [OverallPas];
-        coloro2=[1,0,0];
-    elseif OverallAct>OverallPas
-        xo2 = categorical({'Active'});
-        yo2 = [OverallAct];
-        coloro2=[0,0,0];
-        xo1 = categorical({'Passive'});
-        yo1 = [OverallPas];
-        coloro1=[1,0,0];
-    end
-    %lin vs nonlin
-    OverallLin = mean(overallMeans(3,:));
-    OverallNonlin = mean(overallMeans(4,:));
-    if OverallNonlin>OverallLin
-        xo3 = categorical({'Linear'});
-        yo3 = [OverallLin];
-        fillo3=1;
-        xo4 = categorical({'Nonlinear'});
-        yo4 = [OverallNonlin];
-        fillo4=0.3;
-    elseif meanLin>meanNonlin
-        xo4 = categorical({'Linear'});
-        yo4 = [OverallLin];
-        fillo4=1;
-        xo3 = categorical({'Nonlinear'});
-        yo3 = [OverallNonlin];
-        fillo3=0.3;
-    end
-    %plot active (black)
-    bo1 = barh(xo1,yo1,'FaceColor',coloro1,'facealpha',1);
+    %scatter plots
+    low = -1;
+    high = 1;
+    step = 0.25;
+    fig1 = figure('Name','Linear/Nonlinear Active/Passive comparison across units');
+    sgtitle('Linear/Nonlinear Active/Passive comparison across units');
+    x = [low:high];
+    y = x;
+    
+    subplot(2,2,1);
+    scatter(linAct,linPas)
+    title('Linear active vs. passive');
+    xlabel('Linear Active pR2')
+    ylabel('Linear Passive pR2')
+    xlim([low high])
+    set(gca,'XTick',low:step:high)
+    ylim([low high])
+    set(gca,'YTick',low:step:high)
     hold on
-    %plot passive (red)
-    bo2 = barh(xo2,yo2,'FaceColor',coloro2,'facealpha',1);
-    %plot linear (dark maroon)
-    bo3 = barh(xo3,yo3,'FaceColor',[0.4 0 0],'facealpha',fillo3);
-    %plot nonlinear (light maroon)
-    bo4 = barh(xo4,yo4,'FaceColor',[0.4 0 0],'facealpha',fillo4);
-    %axes and legend
-    xlabel('mean pR2');
-%     xlim([-.5 0.5])
-%     set(gca,'XTick',-.5:0.25:0.5)
-    xlim([-20 0.5])
-    set(gca,'XTick',-20:5:0.5)
-    title('All units combined');
+    plot(x,y)
     
+    subplot(2,2,2);
+    scatter(nonlinAct,nonlinPas)
+    title('Nonlinear active vs. passive');
+    xlabel('Nonlinear Active pR2')
+    ylabel('Nonlinear Passive pR2')
+    xlim([low high])
+    set(gca,'XTick',low:step:high)
+    ylim([low high])
+    set(gca,'YTick',low:step:high)
+    hold on
+    plot(x,y)
     
-    clear k ind  maxLinAct maxLinActInd bestMuscLinAct
+    subplot(2,2,3);
+    scatter(linAct,nonlinAct)
+    title('Active linear vs nonlinear');
+    xlabel('Active Linear pR2')
+    ylabel('Active Nonlinear pR2')
+    xlim([low high])
+    set(gca,'XTick',low:step:high)
+    ylim([low high])
+    set(gca,'YTick',low:step:high)
+    hold on
+    plot(x,y)
+    
+    subplot(2,2,4);
+    scatter(linPas,nonlinPas)
+    title('Passive linear vs nonlinear');
+    xlabel('Passive Linear pR2')
+    ylabel('Passive Nonlinear pR2')
+    xlim([low high])
+    set(gca,'XTick',low:step:high)
+    ylim([low high])
+    set(gca,'YTick',low:step:high)
+    hold on
+    plot(x,y)
+    
+    clear maxLinAct maxLinActInd bestMuscLinAct
     clear maxNonlinAct maxNonlinActInd bestMuscNonlinAct
     clear maxLinPas maxLinPasInd bestMuscLinPas
     clear maxNonlinPas maxNonlinPasInd bestMuscNonlinPas
     clear linActInd linPasInd nonlinActInd nonlinPasInd
     clear bests j check indexes addition muscleLabels x
     clear n c
-    clear color1 color2 fill3 fill4
-    clear coloro1 coloro2 fillo3 fillo4
-    clear x1 x2 x3 x4 y1 y2 y3 y4
-    clear xo1 xo2 xo3 xo4 yo1 yo2 yo3 yo4
-    clear OverallAct OverallPas OverallLin OverallNonlin
     clear meanLinAct meanLinPas meanNonlinAct meanNonlinPas
     clear meanAct meanPas meanLin meanNonlin
-    clear b1 b2 b3 b4 bo1 bo2 bo3 bo4
     clear checkMuscles muscleArray1
 
 %% make plots
