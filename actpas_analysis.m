@@ -285,168 +285,327 @@
         'lat_dorsi_sup','lat_dorsi_cen','lat_dorsi_inf','pectoralis_sup',...
         'pectoralis_inf',...
         'teres_major','tricep_lat','tricep_lon','tricep_sho'};
-    allMuscAvgNeurEval = [];
     
-    for muscleNum=1:length(muscleArray)
+    exponents = [0.6:0.1:0.9,2:1:5];
+%     multiExp4dArray = zeros(size(td(1).S1_spikes,2),8,numel(muscleArray),numel(exponents));
+    for d=2:numel(exponents)
+        curExp = exponents(d);
         
-        muscle = muscleArray(muscleNum);
-%         model_aliases = {'muscLin'};
-        model_aliases = {'muscNonlin'};
-%         models_to_plot = {neural_signals,'muscLin'};
-        models_to_plot = {neural_signals,'muscNonlin'};
-%         model_titles = {'Actual Firing','Muscle Linear'};
-        model_titles = {'Actual Firing','Muscle Nonlinear'};
+        allMuscAvgNeurEval = [];
 
-        neuron_eval_cell =cell(length(trial_data_cell),1);
-        fileclock = tic;
-        fprintf('Starting analysis for %d files. This will take a while...',length(trial_data_cell))
-        for filenum = 1:length(trial_data_cell)
-            td = trial_data_cell{filenum};
-
-            % trim to just movements
-            td = trimTD(td,{'idx_movement_on',0},{'idx_movement_on',11});
-
-            % check to make sure all neurons fire at least once in each condition (pretty rare that one doesn't)
-            [~,td_act] = getTDidx(td,'ctrHoldBump',false);
-            [~,td_pas] = getTDidx(td,'ctrHoldBump',true);
-            firing_units = mean(getSig(td_act,'S1_spikes'))~=0 & mean(getSig(td_pas,'S1_spikes'))~=0;
-            if any(~firing_units)
-                unit_ids = td(1).([arrayname '_unit_guide']);
-                new_unit_guide = unit_ids(firing_units,:);
-
-                for trialnum = 1:length(td)
-                    td(trialnum).(sprintf('%s_unit_guide',arrayname)) = new_unit_guide;
-
-                    spikes = td(trialnum).(sprintf('%s_spikes',arrayname));
-                    spikes(:,~firing_units) = [];
-                    td(trialnum).(sprintf('%s_spikes',arrayname)) = spikes;
-                end
-                fprintf('Removed %d neurons for not firing in one condition\n',sum(~firing_units))
-            end
-
-            % add firing rates in addition to spike counts
-            td = addFiringRates(td,struct('array',arrayname));
-
-            % find average over the movement
-            td = binTD(td,'average');
+        for muscleNum=1:length(muscleArray)
             
-            %find l-naught for muscle length/velocity normalization
-            listL0 = zeros(1,numel(td_trim));
-            muscleIndex = find(ismember(td_trim(1).muscle_names,muscleArray(muscleNum)));
-            for t=1:numel(td_trim)
-                %for bump trials
-                if td_trim(t).ctrHoldBump==1
-                    trialL0 = mean(td_trim(t).muscle_len(td_trim(t).idx_startTime:td_trim(t).idx_bumpTime,muscleIndex));
-                elseif td_trim(t).ctrHoldBump==0
-                    trialL0 = mean(td_trim(t).muscle_len(td_trim(t).idx_startTime:td_trim(t).idx_goCueTime,muscleIndex));
+            fprintf('exp: %i',exponents(d))
+            fprintf('muscle: %i',muscleNum)
+
+            muscle = muscleArray(muscleNum);
+    %         model_aliases = {'muscLin'};
+            model_aliases = {'muscNonlin'};
+    %         models_to_plot = {neural_signals,'muscLin'};
+            models_to_plot = {neural_signals,'muscNonlin'};
+    %         model_titles = {'Actual Firing','Muscle Linear'};
+            model_titles = {'Actual Firing','Muscle Nonlinear'};
+
+            neuron_eval_cell =cell(length(trial_data_cell),1);
+            fileclock = tic;
+            fprintf('Starting analysis for %d files. This will take a while...',length(trial_data_cell))
+            for filenum = 1:length(trial_data_cell)
+                td = trial_data_cell{filenum};
+
+                % trim to just movements
+                td = trimTD(td,{'idx_movement_on',0},{'idx_movement_on',11});
+
+                % check to make sure all neurons fire at least once in each condition (pretty rare that one doesn't)
+                [~,td_act] = getTDidx(td,'ctrHoldBump',false);
+                [~,td_pas] = getTDidx(td,'ctrHoldBump',true);
+                firing_units = mean(getSig(td_act,'S1_spikes'))~=0 & mean(getSig(td_pas,'S1_spikes'))~=0;
+                if any(~firing_units)
+                    unit_ids = td(1).([arrayname '_unit_guide']);
+                    new_unit_guide = unit_ids(firing_units,:);
+
+                    for trialnum = 1:length(td)
+                        td(trialnum).(sprintf('%s_unit_guide',arrayname)) = new_unit_guide;
+
+                        spikes = td(trialnum).(sprintf('%s_spikes',arrayname));
+                        spikes(:,~firing_units) = [];
+                        td(trialnum).(sprintf('%s_spikes',arrayname)) = spikes;
+                    end
+                    fprintf('Removed %d neurons for not firing in one condition\n',sum(~firing_units))
                 end
-                listL0(1,t) = trialL0;
-            end
-            L0 = mean(listL0);
 
-            %% find separabilities
-            % suppress getTDfields warning...
-            getTDfields(td,'time');
-            onetime_warn = warning('query','last'); 
-            warning('off',onetime_warn.identifier)
-            
-            %normalize
-            muscleIndex = find(ismember(td_trim(1).muscle_names,muscleArray(muscleNum)));
-            for tr=1:numel(td)
-                td(tr).muscle_len(:,muscleNum) = td(tr).muscle_len(:,muscleNum)./L0;
-                td(tr).muscle_vel(:,muscleNum) = td(tr).muscle_vel(:,muscleNum)./L0;
-                
-                %nonlinearize if muscNonlin model
-                if strcmpi(model_aliases,'muscNonlin')
-                    td(tr).muscle_vel(:,muscleNum) = sign(td(tr).muscle_vel(:,muscleNum)).*(abs(td(tr).muscle_vel(:,muscleNum))).^0.5;
+                % add firing rates in addition to spike counts
+                td = addFiringRates(td,struct('array',arrayname));
+
+                % find average over the movement
+                td = binTD(td,'average');
+
+                %find l-naught for muscle length/velocity normalization
+                listL0 = zeros(1,numel(td_trim));
+                muscleIndex = find(ismember(td_trim(1).muscle_names,muscleArray(muscleNum)));
+                for t=1:numel(td_trim)
+                    %for bump trials
+                    if td_trim(t).ctrHoldBump==1
+                        trialL0 = mean(td_trim(t).muscle_len(td_trim(t).idx_startTime:td_trim(t).idx_bumpTime,muscleIndex));
+                    elseif td_trim(t).ctrHoldBump==0
+                        trialL0 = mean(td_trim(t).muscle_len(td_trim(t).idx_startTime:td_trim(t).idx_goCueTime,muscleIndex));
+                    end
+                    listL0(1,t) = trialL0;
                 end
+                L0 = mean(listL0);
+
+                %% find separabilities
+                % suppress getTDfields warning...
+                getTDfields(td,'time');
+                onetime_warn = warning('query','last'); 
+                warning('off',onetime_warn.identifier)
+
+                %normalize
+                muscleIndex = find(ismember(td_trim(1).muscle_names,muscleArray(muscleNum)));
+                for tr=1:numel(td)
+                    td(tr).muscle_len(:,muscleNum) = td(tr).muscle_len(:,muscleNum)./L0;
+                    td(tr).muscle_vel(:,muscleNum) = td(tr).muscle_vel(:,muscleNum)./L0;
+
+                    %nonlinearize if muscNonlin model
+                    if strcmpi(model_aliases,'muscNonlin')
+                        if curExp<1
+                            td(tr).muscle_vel(:,muscleNum) = sign(td(tr).muscle_vel(:,muscleNum)).*(abs(td(tr).muscle_vel(:,muscleNum))).^curExp;
+                        elseif curExp>1
+                            td(tr).muscle_vel(:,muscleNum) = (td(tr).muscle_vel(:,muscleNum)).^curExp;
+                        end
+                    end
+                end
+
+                sepResults = actpasSep(td,struct(...
+                    'neural_signals',[arrayname '_FR'],...
+                    'model_aliases',{model_aliases},...
+                    'muscle',muscle));
+
+                % turn warning back on
+                warning('on',onetime_warn.identifier)
+
+                % extract neuron_eval_table and trial_table
+                % replace infs with nans
+                numeric_cols = strcmpi(sepResults.neuron_eval_table.Properties.VariableDescriptions,'linear');
+                numeric_vals = sepResults.neuron_eval_table(:,numeric_cols).Variables;
+                infidx = isinf(numeric_vals);
+                numeric_vals(infidx) = NaN;
+                sepResults.neuron_eval_table(:,numeric_cols).Variables = numeric_vals;
+
+                % compile neuron eval table together
+                neuron_eval_cell{filenum} = sepResults.neuron_eval_table;
+
+                % extract only the columns we want to keep
+                neuron_eval_cell{filenum}.Properties.VariableNames = strrep(neuron_eval_cell{filenum}.Properties.VariableNames,'glm_','');
+                neuron_eval_cell{filenum}.Properties.VariableNames = strrep(neuron_eval_cell{filenum}.Properties.VariableNames,'model_','');
+                cols_to_keep = [...
+                    {'monkey','date','task','signalID','crossvalID'},...
+                    strcat(models_to_plot(2:end),'_eval'),...
+                    strcat(models_to_plot(2:end),'_act_eval'),...
+                    strcat(models_to_plot(2:end),'_pas_eval'),...
+                    strcat(models_to_plot(2:end),'_train_act_eval'),...
+                    strcat(models_to_plot(2:end),'_train_pas_eval'),...
+                    strcat(models_to_plot(2:end),'_half_full_train_act_eval'),...
+                    strcat(models_to_plot(2:end),'_half_full_train_pas_eval'),...
+                    strcat(models_to_plot(1),'_indiv_sep')];
+
+                neuron_eval_cell{filenum} = neuron_eval_cell{filenum}(:,cols_to_keep);
+
+                % make a histogram plot of neural firing rates for active and passive trials
+    %             session_trials = neuronAverage(sepResults.trial_table,struct(...
+    %                 'keycols',{{'monkey','date_time','task','trialID','isPassive'}},...
+    %                 'do_ci',false));
+    %             figure('defaultaxesfontsize',18)
+    %             ax = zeros(size(session_trials.S1_FR,2),1);
+    %             % here we know that there are only a finite number of possibilities
+    %             possible_FR = unique(session_trials.S1_FR);
+    %             % split into active and passive
+    %             [~,act_trials] = getNTidx(session_trials,'isPassive',false);
+    %             [~,pas_trials] = getNTidx(session_trials,'isPassive',true);
+    %             for neuronnum = 1:size(session_trials.S1_FR,2)
+    %                 ax(neuronnum) = subplot(1,size(session_trials.S1_FR,2),neuronnum);
+    % 
+    %                 % get counts of fr in the unique bins
+    %                 act_counts = histcounts(act_trials.S1_FR(:,neuronnum),[possible_FR;Inf]);
+    %                 pas_counts = histcounts(pas_trials.S1_FR(:,neuronnum),[possible_FR;Inf]);
+    % 
+    %                 % plot bars for each
+    %                 % plot([0 0],[possible_FR(1) possible_FR(end)])
+    %                 barh(possible_FR',act_counts,1,'FaceColor','k','EdgeColor','none','FaceAlpha',0.5)
+    %                 hold on
+    %                 barh(possible_FR',pas_counts,1,'FaceColor','r','EdgeColor','none','FaceAlpha',0.5)
+    % 
+    %                 % set(gca,'box','off','tickdir','out')
+    %                 axis off
+    %             end
+    %             subplot(1,size(session_trials.S1_FR,2),1)
+    %             axis on
+    %             set(gca,'box','off','tickdir','out','xtick',[])
+    %             ylabel('Firing rate (Hz)')
+    %             suptitle(sprintf('%s %s',session_trials.monkey{1},session_trials.date_time{1}))
+    %             linkaxes(ax,'y')
+
+                % output a counter
+                fprintf('Processed file %d of %d at time %f\n',filenum,length(trial_data_cell),toc(fileclock))
             end
 
-            sepResults = actpasSep(td,struct(...
-                'neural_signals',[arrayname '_FR'],...
-                'model_aliases',{model_aliases},...
-                'muscle',muscle,...
-                'L0',L0));
+            % compile and average
+            neuron_eval = vertcat(neuron_eval_cell{:});
+            avg_neuron_eval = neuronAverage(neuron_eval,struct(...
+                'keycols',{{'monkey','date','task','signalID'}},...
+                'do_ci',false,...
+                'do_nanmean',true));
 
-            % turn warning back on
-            warning('on',onetime_warn.identifier)
-
-            % extract neuron_eval_table and trial_table
-            % replace infs with nans
-            numeric_cols = strcmpi(sepResults.neuron_eval_table.Properties.VariableDescriptions,'linear');
-            numeric_vals = sepResults.neuron_eval_table(:,numeric_cols).Variables;
-            infidx = isinf(numeric_vals);
-            numeric_vals(infidx) = NaN;
-            sepResults.neuron_eval_table(:,numeric_cols).Variables = numeric_vals;
-
-            % compile neuron eval table together
-            neuron_eval_cell{filenum} = sepResults.neuron_eval_table;
-
-            % extract only the columns we want to keep
-            neuron_eval_cell{filenum}.Properties.VariableNames = strrep(neuron_eval_cell{filenum}.Properties.VariableNames,'glm_','');
-            neuron_eval_cell{filenum}.Properties.VariableNames = strrep(neuron_eval_cell{filenum}.Properties.VariableNames,'model_','');
-            cols_to_keep = [...
-                {'monkey','date','task','signalID','crossvalID'},...
-                strcat(models_to_plot(2:end),'_eval'),...
-                strcat(models_to_plot(2:end),'_act_eval'),...
-                strcat(models_to_plot(2:end),'_pas_eval'),...
-                strcat(models_to_plot(2:end),'_train_act_eval'),...
-                strcat(models_to_plot(2:end),'_train_pas_eval'),...
-                strcat(models_to_plot(2:end),'_half_full_train_act_eval'),...
-                strcat(models_to_plot(2:end),'_half_full_train_pas_eval'),...
-                strcat(models_to_plot(1),'_indiv_sep')];
-
-            neuron_eval_cell{filenum} = neuron_eval_cell{filenum}(:,cols_to_keep);
-
-            % make a histogram plot of neural firing rates for active and passive trials
-%             session_trials = neuronAverage(sepResults.trial_table,struct(...
-%                 'keycols',{{'monkey','date_time','task','trialID','isPassive'}},...
-%                 'do_ci',false));
-%             figure('defaultaxesfontsize',18)
-%             ax = zeros(size(session_trials.S1_FR,2),1);
-%             % here we know that there are only a finite number of possibilities
-%             possible_FR = unique(session_trials.S1_FR);
-%             % split into active and passive
-%             [~,act_trials] = getNTidx(session_trials,'isPassive',false);
-%             [~,pas_trials] = getNTidx(session_trials,'isPassive',true);
-%             for neuronnum = 1:size(session_trials.S1_FR,2)
-%                 ax(neuronnum) = subplot(1,size(session_trials.S1_FR,2),neuronnum);
-% 
-%                 % get counts of fr in the unique bins
-%                 act_counts = histcounts(act_trials.S1_FR(:,neuronnum),[possible_FR;Inf]);
-%                 pas_counts = histcounts(pas_trials.S1_FR(:,neuronnum),[possible_FR;Inf]);
-% 
-%                 % plot bars for each
-%                 % plot([0 0],[possible_FR(1) possible_FR(end)])
-%                 barh(possible_FR',act_counts,1,'FaceColor','k','EdgeColor','none','FaceAlpha',0.5)
-%                 hold on
-%                 barh(possible_FR',pas_counts,1,'FaceColor','r','EdgeColor','none','FaceAlpha',0.5)
-% 
-%                 % set(gca,'box','off','tickdir','out')
-%                 axis off
-%             end
-%             subplot(1,size(session_trials.S1_FR,2),1)
-%             axis on
-%             set(gca,'box','off','tickdir','out','xtick',[])
-%             ylabel('Firing rate (Hz)')
-%             suptitle(sprintf('%s %s',session_trials.monkey{1},session_trials.date_time{1}))
-%             linkaxes(ax,'y')
-
-            % output a counter
-            fprintf('Processed file %d of %d at time %f\n',filenum,length(trial_data_cell),toc(fileclock))
+            % save each muscle into 3d array
+            currentMuscleTable = table2array(avg_neuron_eval(:,5:12));
+            allMuscAvgNeurEval = cat(3,allMuscAvgNeurEval,currentMuscleTable);
         end
 
-        % compile and average
-        neuron_eval = vertcat(neuron_eval_cell{:});
-        avg_neuron_eval = neuronAverage(neuron_eval,struct(...
-            'keycols',{{'monkey','date','task','signalID'}},...
-            'do_ci',false,...
-            'do_nanmean',true));
-        
-        % save each muscle into 3d array
-        currentMuscleTable = table2array(avg_neuron_eval(:,5:12));
-        allMuscAvgNeurEval = cat(3,allMuscAvgNeurEval,currentMuscleTable);
+        multiExp4dArray(:,:,:,d) = allMuscAvgNeurEval(:,:,:,1);
     end
+    
+    
+    %% FOR EMG INPUTS - Loop through results to pull out relevant info
+
+    muscleArray = {'bicep_lh','bicep_sh','brachialis',...
+        'brachioradialis','deltoid_ant','deltoid_med','deltoid_pos',...
+        'ext_carp_rad_brevis','ext_carpi_ulnaris',...
+        'ext_digitorum','flex_carpi_radialis','flex_carpi_ulnaris',...
+        'flex_digit_superficialis','infraspinatus',...
+        'lat_dorsi_sup','lat_dorsi_cen','lat_dorsi_inf','pectoralis_sup',...
+        'pectoralis_inf',...
+        'teres_major','tricep_lat','tricep_lon','tricep_sho'};
+    
+        emgMuscAvgNeurEval = [];
+
+        for muscleNum=1:length(muscleArray)
+
+            muscle = muscleArray(muscleNum);
+            model_aliases = {'muscLin','muscEMG'};
+            models_to_plot = {neural_signals,'muscLin','muscEMG'};
+            model_titles = {'Actual Firing','Muscle Linear','Muscle EMG'};
+
+            neuron_eval_cell =cell(length(trial_data_cell),1);
+            fileclock = tic;
+            fprintf('Starting analysis for %d files. This will take a while...',length(trial_data_cell))
+            for filenum = 1:length(trial_data_cell)
+                td = trial_data_cell{filenum};
+
+                % trim to just post-bump movements for passive movements 
+                % (and equivalent time window for active reaches)
+                td = trimTD(td,{'idx_movement_on',0},{'idx_movement_on',11});
+
+                % check to make sure all neurons fire at least once in each condition (pretty rare that one doesn't)
+                [~,td_act] = getTDidx(td,'ctrHoldBump',false);
+                [~,td_pas] = getTDidx(td,'ctrHoldBump',true);
+                firing_units = mean(getSig(td_act,'S1_spikes'))~=0 & mean(getSig(td_pas,'S1_spikes'))~=0;
+                if any(~firing_units)
+                    unit_ids = td(1).([arrayname '_unit_guide']);
+                    new_unit_guide = unit_ids(firing_units,:);
+
+                    for trialnum = 1:length(td)
+                        td(trialnum).(sprintf('%s_unit_guide',arrayname)) = new_unit_guide;
+
+                        spikes = td(trialnum).(sprintf('%s_spikes',arrayname));
+                        spikes(:,~firing_units) = [];
+                        td(trialnum).(sprintf('%s_spikes',arrayname)) = spikes;
+                    end
+                    fprintf('Removed %d neurons for not firing in one condition\n',sum(~firing_units))
+                end
+
+                % add firing rates in addition to spike counts
+                td = addFiringRates(td,struct('array',arrayname));
+
+                % find average over the movement
+                td = binTD(td,'average');
+
+                %find l-naught for muscle length/velocity normalization
+                listL0 = zeros(1,numel(td_trim));
+                muscleIndex = find(ismember(td_trim(1).muscle_names,muscleArray(muscleNum)));
+                for t=1:numel(td_trim)
+                    %for bump trials
+                    if td_trim(t).ctrHoldBump==1
+                        trialL0 = mean(td_trim(t).muscle_len(td_trim(t).idx_startTime:td_trim(t).idx_bumpTime,muscleIndex));
+                    elseif td_trim(t).ctrHoldBump==0
+                        trialL0 = mean(td_trim(t).muscle_len(td_trim(t).idx_startTime:td_trim(t).idx_goCueTime,muscleIndex));
+                    end
+                    listL0(1,t) = trialL0;
+                end
+                L0 = mean(listL0);
+
+                %% find separabilities
+                % suppress getTDfields warning...
+                getTDfields(td,'time');
+                onetime_warn = warning('query','last'); 
+                warning('off',onetime_warn.identifier)
+
+                %normalize
+                muscleIndex = find(ismember(td_trim(1).muscle_names,muscleArray(muscleNum)));
+                for tr=1:numel(td)
+                    td(tr).muscle_len(:,muscleNum) = td(tr).muscle_len(:,muscleNum)./L0;
+                    td(tr).muscle_vel(:,muscleNum) = td(tr).muscle_vel(:,muscleNum)./L0;
+
+                    %nonlinearize if muscNonlin model
+                    if strcmpi(model_aliases,'muscNonlin')
+                        if curExp<1
+                            td(tr).muscle_vel(:,muscleNum) = sign(td(tr).muscle_vel(:,muscleNum)).*(abs(td(tr).muscle_vel(:,muscleNum))).^curExp;
+                        elseif curExp>1
+                            td(tr).muscle_vel(:,muscleNum) = (td(tr).muscle_vel(:,muscleNum)).^curExp;
+                        end
+                    end
+                end
+
+                sepResults = actpasSep(td,struct(...
+                    'neural_signals',[arrayname '_FR'],...
+                    'model_aliases',{model_aliases},...
+                    'muscle',muscle,...
+                    'L0',L0));
+
+                % turn warning back on
+                warning('on',onetime_warn.identifier)
+
+                % extract neuron_eval_table and trial_table
+                % replace infs with nans
+                numeric_cols = strcmpi(sepResults.neuron_eval_table.Properties.VariableDescriptions,'linear');
+                numeric_vals = sepResults.neuron_eval_table(:,numeric_cols).Variables;
+                infidx = isinf(numeric_vals);
+                numeric_vals(infidx) = NaN;
+                sepResults.neuron_eval_table(:,numeric_cols).Variables = numeric_vals;
+
+                % compile neuron eval table together
+                neuron_eval_cell{filenum} = sepResults.neuron_eval_table;
+
+                % extract only the columns we want to keep
+                neuron_eval_cell{filenum}.Properties.VariableNames = strrep(neuron_eval_cell{filenum}.Properties.VariableNames,'glm_','');
+                neuron_eval_cell{filenum}.Properties.VariableNames = strrep(neuron_eval_cell{filenum}.Properties.VariableNames,'model_','');
+                cols_to_keep = [...
+                    {'monkey','date','task','signalID','crossvalID'},...
+                    strcat(models_to_plot(2:end),'_eval'),...
+                    strcat(models_to_plot(2:end),'_act_eval'),...
+                    strcat(models_to_plot(2:end),'_pas_eval'),...
+                    strcat(models_to_plot(2:end),'_train_act_eval'),...
+                    strcat(models_to_plot(2:end),'_train_pas_eval'),...
+                    strcat(models_to_plot(2:end),'_half_full_train_act_eval'),...
+                    strcat(models_to_plot(2:end),'_half_full_train_pas_eval'),...
+                    strcat(models_to_plot(1),'_indiv_sep')];
+
+                neuron_eval_cell{filenum} = neuron_eval_cell{filenum}(:,cols_to_keep);
+
+                % output a counter
+                fprintf('Processed file %d of %d at time %f\n',filenum,length(trial_data_cell),toc(fileclock))
+            end
+
+            % compile and average
+            neuron_eval = vertcat(neuron_eval_cell{:});
+            avg_neuron_eval = neuronAverage(neuron_eval,struct(...
+                'keycols',{{'monkey','date','task','signalID'}},...
+                'do_ci',false,...
+                'do_nanmean',true));
+
+            % save each muscle into 3d array
+            currentMuscleTable = table2array(avg_neuron_eval(:,5:12));
+            emgMuscAvgNeurEval = cat(3,emgMuscAvgNeurEval,currentMuscleTable);
+        end
+
     
 %% bar plots of pR2 values for each muscle
 
@@ -470,7 +629,7 @@
     muscleArray([1,2,7,11,12,16,17,20,22,27,30,31,32,33,34,36]) = [];
 %     emgMuscAvgNeurEval = allMuscAvgNeurEval;
 %     emgMuscAvgNeurEval(:,:,[1,2,7,11,12,16,17,20,22,27,30,31,32,33,34,36]) = [];
-    emgMuscAvgNeurEval = combinedTable;
+    muscAvgNeurEval = combinedTable;
     
     %KEEP THESE
 %     muscleArray = {'bicep_lh','bicep_sh','brachialis',...
@@ -492,7 +651,7 @@
     fig2 = figure('Name','Top muscles pR2 for units 16-30');
     fig3 = figure('Name','Top muscles pR2 for units 31-45');
     fig4 = figure('Name','Top muscles pR2 for units 46-53');
-    for n=1:numel(emgMuscAvgNeurEval(:,1,1))
+    for n=1:numel(muscAvgNeurEval(:,1,1))
         k=k+1;
         muscleLabels = strings(1,numMuscles*4);
         if k<=15
@@ -513,17 +672,17 @@
         end
         
         %find best muscles pR2 evaluated in act
-        [maxLinAct, maxLinActInd] = maxk(emgMuscAvgNeurEval(n,3,:),numMuscles);
+        [maxLinAct, maxLinActInd] = maxk(muscAvgNeurEval(n,3,:),numMuscles);
         bestMuscLinAct = reshape(permute(maxLinAct,[3,2,1]),[1,numMuscles]);
         maxLinActInd = reshape(permute(maxLinActInd,[3,2,1]),[1,numMuscles]);
-        [maxNonlinAct, maxNonlinActInd] = maxk(emgMuscAvgNeurEval(n,4,:),numMuscles);
+        [maxNonlinAct, maxNonlinActInd] = maxk(muscAvgNeurEval(n,4,:),numMuscles);
         bestMuscNonlinAct = reshape(permute(maxNonlinAct,[3,2,1]),[1,numMuscles]);
         maxNonlinActInd = reshape(permute(maxNonlinActInd,[3,2,1]),[1,numMuscles]);
         %find best muscles pR2 evaluated in pas
-        [maxLinPas, maxLinPasInd] = maxk(emgMuscAvgNeurEval(n,5,:),numMuscles);
+        [maxLinPas, maxLinPasInd] = maxk(muscAvgNeurEval(n,5,:),numMuscles);
         bestMuscLinPas = reshape(permute(maxLinPas,[3,2,1]),[1,numMuscles]);
         maxLinPasInd = reshape(permute(maxLinPasInd,[3,2,1]),[1,numMuscles]);
-        [maxNonlinPas, maxNonlinPasInd] = maxk(emgMuscAvgNeurEval(n,6,:),numMuscles);
+        [maxNonlinPas, maxNonlinPasInd] = maxk(muscAvgNeurEval(n,6,:),numMuscles);
         bestMuscNonlinPas = reshape(permute(maxNonlinPas,[3,2,1]),[1,numMuscles]);
         maxNonlinPasInd = reshape(permute(maxNonlinPasInd,[3,2,1]),[1,numMuscles]);
         
@@ -601,18 +760,18 @@
 %     clear n
 
 %% hack-y way to get scatter plots from normalized models
-combinedTable = zeros(size(emgMuscAvgNeurEval,1),16,numel(muscleArray));
-j = 1;
-for i=1:8
-    combinedTable(:,j,:) = linearMuscleTable(:,i,:);
-    j=j+1;
-    combinedTable(:,j,:) = nonlinearMuscleTable(:,i,:);
-    j=j+1;
-end
+for d=1:size(multiExp4dArray,4)
+    combinedTable = zeros(size(multiExp4dArray,1),16,numel(muscleArray));
+    j = 1;
+    for i=1:8
+        combinedTable(:,j,:) = linearMuscleTable(:,i,:);
+        j=j+1;
+        combinedTable(:,j,:) = multiExp4dArray(:,i,:,d);
+        j=j+1;
+    end
 
-
-
-%% scatter plots of mean pR2
+    
+% scatter plots of mean pR2
 
     muscleArray = {'bicep_lh','bicep_sh','brachialis',...
     'brachioradialis','deltoid_ant','deltoid_med','deltoid_pos',...
@@ -626,34 +785,34 @@ end
 %     emgMuscAvgNeurEval = allMuscAvgNeurEval;
 %     emgMuscAvgNeurEval(:,:,[1,2,7,11,12,16,17,20,22,27,30,31,32,33,34,36]) = [];
 
-    emgMuscAvgNeurEval = combinedTable;
+    muscAvgNeurEval = combinedTable;
 
 
     %find numMuscles best muscles pR2 for each unit
-    numMuscles = 1;
+    numMuscles = 5;
     
     %pre-allocate arrays
-    linAct = zeros(1,numel(emgMuscAvgNeurEval(:,1,1)));
-    nonlinAct = zeros(1,numel(emgMuscAvgNeurEval(:,1,1)));
-    linPas = zeros(1,numel(emgMuscAvgNeurEval(:,1,1)));
-    nonlinPas = zeros(1,numel(emgMuscAvgNeurEval(:,1,1)));
-    unitMuscles = strings(numMuscles,numel(emgMuscAvgNeurEval(:,1,1)));
+    linAct = zeros(1,numel(muscAvgNeurEval(:,1,1)));
+    nonlinAct = zeros(1,numel(muscAvgNeurEval(:,1,1)));
+    linPas = zeros(1,numel(muscAvgNeurEval(:,1,1)));
+    nonlinPas = zeros(1,numel(muscAvgNeurEval(:,1,1)));
+    unitMuscles = strings(numMuscles,numel(muscAvgNeurEval(:,1,1)));
     
     %loop through each unit
-    for n=1:numel(emgMuscAvgNeurEval(:,1,1))
+    for n=1:numel(muscAvgNeurEval(:,1,1))
         
         %find best muscles pR2 evaluated in act
-        [maxLinAct, maxLinActInd] = maxk(emgMuscAvgNeurEval(n,3,:),numMuscles);
+        [maxLinAct, maxLinActInd] = maxk(muscAvgNeurEval(n,3,:),numMuscles);
         bestMuscLinAct = reshape(permute(maxLinAct,[3,2,1]),[1,numMuscles]);
         maxLinActInd = reshape(permute(maxLinActInd,[3,2,1]),[1,numMuscles]);
-        [maxNonlinAct, maxNonlinActInd] = maxk(emgMuscAvgNeurEval(n,4,:),numMuscles);
+        [maxNonlinAct, maxNonlinActInd] = maxk(muscAvgNeurEval(n,4,:),numMuscles);
         bestMuscNonlinAct = reshape(permute(maxNonlinAct,[3,2,1]),[1,numMuscles]);
         maxNonlinActInd = reshape(permute(maxNonlinActInd,[3,2,1]),[1,numMuscles]);
         %find best muscles pR2 evaluated in pas
-        [maxLinPas, maxLinPasInd] = maxk(emgMuscAvgNeurEval(n,5,:),numMuscles);
+        [maxLinPas, maxLinPasInd] = maxk(muscAvgNeurEval(n,5,:),numMuscles);
         bestMuscLinPas = reshape(permute(maxLinPas,[3,2,1]),[1,numMuscles]);
         maxLinPasInd = reshape(permute(maxLinPasInd,[3,2,1]),[1,numMuscles]);
-        [maxNonlinPas, maxNonlinPasInd] = maxk(emgMuscAvgNeurEval(n,6,:),numMuscles);
+        [maxNonlinPas, maxNonlinPasInd] = maxk(muscAvgNeurEval(n,6,:),numMuscles);
         bestMuscNonlinPas = reshape(permute(maxNonlinPas,[3,2,1]),[1,numMuscles]);
         maxNonlinPasInd = reshape(permute(maxNonlinPasInd,[3,2,1]),[1,numMuscles]);
         
@@ -673,10 +832,10 @@ end
         elseif bestGroupIdx==4
             checkMuscles = maxNonlinPasInd;
         end
-        bestMuscLinAct = reshape(permute(emgMuscAvgNeurEval(n,3,checkMuscles),[3,2,1]),[1,numMuscles]);
-        bestMuscNonlinAct = reshape(permute(emgMuscAvgNeurEval(n,4,checkMuscles),[3,2,1]),[1,numMuscles]);
-        bestMuscLinPas = reshape(permute(emgMuscAvgNeurEval(n,5,checkMuscles),[3,2,1]),[1,numMuscles]);
-        bestMuscNonlinPas = reshape(permute(emgMuscAvgNeurEval(n,6,checkMuscles),[3,2,1]),[1,numMuscles]);
+        bestMuscLinAct = reshape(permute(muscAvgNeurEval(n,3,checkMuscles),[3,2,1]),[1,numMuscles]);
+        bestMuscNonlinAct = reshape(permute(muscAvgNeurEval(n,4,checkMuscles),[3,2,1]),[1,numMuscles]);
+        bestMuscLinPas = reshape(permute(muscAvgNeurEval(n,5,checkMuscles),[3,2,1]),[1,numMuscles]);
+        bestMuscNonlinPas = reshape(permute(muscAvgNeurEval(n,6,checkMuscles),[3,2,1]),[1,numMuscles]);
         
         %save top muscles for unit
         for c=1:numel(checkMuscles)
@@ -752,6 +911,7 @@ end
     set(gca,'YTick',low:step:high)
     hold on
     plot(x,y)
+end
     
     clear maxLinAct maxLinActInd bestMuscLinAct
     clear maxNonlinAct maxNonlinActInd bestMuscNonlinAct
