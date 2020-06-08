@@ -8,7 +8,8 @@ function results = actpasSep(td_bin,params)
         num_pcs = 5; % number of PCs to train LDA on
         model_type = 'glm';
         model_aliases = {'ext','markers_pca'};
-        muscle = 'tricep_sho';
+        muscle = [];
+        emg = [];
         L0 = 1;
         neural_signals = 'S1_FR';
         which_units = 'all'; % replace with a list of indices for which units to use for separability
@@ -53,8 +54,8 @@ function results = actpasSep(td_bin,params)
                 glm_params{modelnum} = struct('model_type',model_type,...
                                         'model_name',[model_aliases{modelnum} '_model'],...
                                         'in_signals',{{'muscle_len',muscle_idx;'muscle_vel',muscle_idx}},...
-                                        'muscLen0',L0,...
                                         'out_signals',neural_signals);
+
             case 'muscNonlin'
                 muscleName = muscle;
                 [point_exists,muscle_idx] = ismember(muscleName,td_bin(1).muscle_names);
@@ -64,8 +65,29 @@ function results = actpasSep(td_bin,params)
                                         'in_signals',{{'muscle_len',muscle_idx;'muscle_vel',muscle_idx}},...
                                         'nonlinearIdx',[2],...
                                         'nonlinearExp',[0.5],...
-                                        'muscLen0',L0,...
                                         'out_signals',neural_signals);
+            
+            case 'muscEMG'
+                muscleName = muscle;
+                [point_exists,muscle_idx] = ismember(muscleName,td_bin(1).muscle_names);
+                assert(all(point_exists),'Muscle does not exist?')
+                emgName = emg;
+                [point_exists,emg_idx] = ismember(emgName,td_bin(1).emg_names);
+                assert(all(point_exists),'Muscle does not exist?')
+                glm_params{modelnum} = struct('model_type',model_type,...
+                                        'model_name',[model_aliases{modelnum} '_model'],...
+                                        'in_signals',{{'muscle_len',muscle_idx;'muscle_vel',muscle_idx;'emg',emg_idx}},...
+                                        'out_signals',neural_signals);
+                                    
+            case 'EMGonly'
+                emgName = emg;
+                [point_exists,emg_idx] = ismember(emgName,td_bin(1).emg_names);
+                assert(all(point_exists),'Muscle does not exist?')
+                glm_params{modelnum} = struct('model_type',model_type,...
+                                        'model_name',[model_aliases{modelnum} '_model'],...
+                                        'in_signals',{{'emg',emg_idx}},...
+                                        'out_signals',neural_signals);
+
             case 'ext'
                 markername = 'Marker_3';
                 [point_exists,marker_hand_idx] = ismember(strcat(markername,'_',{'x','y','z'}),td_bin(1).marker_names);
@@ -255,7 +277,7 @@ function results = actpasSep(td_bin,params)
                 error('Unrecognized model_alias')
             end
         end
-
+        
     %% cross-validate the separabilities
         [~,td_act] = getTDidx(td_bin,'ctrHoldBump',false);
         [~,td_pas] = getTDidx(td_bin,'ctrHoldBump',true);

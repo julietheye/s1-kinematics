@@ -267,7 +267,7 @@
         suptitle(sprintf('Monkey %s %s',td(1).monkey, td(1).date_time))
     end
 
-%% Loop through results to pull out relevant info
+%% Loop through results to pull out relevant info - for nonlinear loop
     
 %     muscleArray = {'abd_poll_longus','anconeus','bicep_lh','bicep_sh','brachialis',...
 %         'brachioradialis','coracobrachialis','deltoid_ant','deltoid_med','deltoid_pos',...
@@ -466,23 +466,42 @@
     
     %% FOR EMG INPUTS - Loop through results to pull out relevant info
 
+    %bump duration (not in this TD, but can get it from CDS)
+    bumpDuration = 0.125/td(1).bin_size;
+    
+    %window between end of bump and end of movement 
+    %found in actPasAnalysis JH
+    endofMove = 18; %bins
+    
+    %removed 'lat_dorsi_sup','lat_dorsi_inf' bec only one lat emg muscle
     muscleArray = {'bicep_lh','bicep_sh','brachialis',...
         'brachioradialis','deltoid_ant','deltoid_med','deltoid_pos',...
         'ext_carp_rad_brevis','ext_carpi_ulnaris',...
         'ext_digitorum','flex_carpi_radialis','flex_carpi_ulnaris',...
         'flex_digit_superficialis','infraspinatus',...
-        'lat_dorsi_sup','lat_dorsi_cen','lat_dorsi_inf','pectoralis_sup',...
+        'lat_dorsi_cen','pectoralis_sup',...
         'pectoralis_inf',...
         'teres_major','tricep_lat','tricep_lon','tricep_sho'};
+    
+    %removed 'trap' bec no equivalent muscle kinematics
+    emgMuscles = {'BiLat','BiMed','Brach',...
+        'Brad','DeltAnt','DeltMid','DeltPos',...
+        'ECRb','ECU',...
+        'EDC','FCR','FCU',...
+        'FDS','InfSpin',...
+        'Lat','PecSup',...
+        'PecInf'...
+        'TerMaj','TriLat','TriMid','TriMed',};
     
         emgMuscAvgNeurEval = [];
 
         for muscleNum=1:length(muscleArray)
 
             muscle = muscleArray(muscleNum);
-            model_aliases = {'muscLin','muscEMG'};
-            models_to_plot = {neural_signals,'muscLin','muscEMG'};
-            model_titles = {'Actual Firing','Muscle Linear','Muscle EMG'};
+            emgMuscle = emgMuscles(muscleNum);
+            model_aliases = {'muscLin','EMGonly'};
+            models_to_plot = {neural_signals,'muscLin','EMGonly'};
+            model_titles = {'Actual Firing','Muscle Linear','EMG Only'};
 
             neuron_eval_cell =cell(length(trial_data_cell),1);
             fileclock = tic;
@@ -492,11 +511,13 @@
 
                 % trim to just post-bump movements for passive movements 
                 % (and equivalent time window for active reaches)
-                td = trimTD(td,{'idx_movement_on',0},{'idx_movement_on',11});
-
-                % check to make sure all neurons fire at least once in each condition (pretty rare that one doesn't)
                 [~,td_act] = getTDidx(td,'ctrHoldBump',false);
                 [~,td_pas] = getTDidx(td,'ctrHoldBump',true);
+                td_pas = trimTD(td_pas,{'idx_bumpTime',bumpDuration+1},{'idx_bumpTime',bumpDuration+1+endofMove-1});
+                td_act = trimTD(td_act,{'idx_endTime',-1*numel(td_pas(1).pos(:,1))+1},{'idx_endTime',0});
+                td = cat(2,td_pas,td_act);
+              
+                % check to make sure all neurons fire at least once in each condition (pretty rare that one doesn't)
                 firing_units = mean(getSig(td_act,'S1_spikes'))~=0 & mean(getSig(td_pas,'S1_spikes'))~=0;
                 if any(~firing_units)
                     unit_ids = td(1).([arrayname '_unit_guide']);
@@ -558,7 +579,7 @@
                     'neural_signals',[arrayname '_FR'],...
                     'model_aliases',{model_aliases},...
                     'muscle',muscle,...
-                    'L0',L0));
+                    'emg',emgMuscle));
 
                 % turn warning back on
                 warning('on',onetime_warn.identifier)
@@ -758,6 +779,168 @@
 %     clear maxNonlinPas maxNonlinPasInd bestMuscNonlinPas
 %     clear bests j check indexes addition muscleLabels x
 %     clear n
+
+%% scatter plots to compare kinematics vs EMG models
+
+% scatter plots of mean pR2
+
+    %removed 'lat_dorsi_sup','lat_dorsi_inf' bec only one lat emg muscle
+    muscleArray = {'bicep_lh','bicep_sh','brachialis',...
+        'brachioradialis','deltoid_ant','deltoid_med','deltoid_pos',...
+        'ext_carp_rad_brevis','ext_carpi_ulnaris',...
+        'ext_digitorum','flex_carpi_radialis','flex_carpi_ulnaris',...
+        'flex_digit_superficialis','infraspinatus',...
+        'lat_dorsi_cen','pectoralis_sup',...
+        'pectoralis_inf',...
+        'teres_major','tricep_lat','tricep_lon','tricep_sho'};
+    
+    %removed 'trap' bec no equivalent muscle kinematics
+    emgMuscles = {'BiLat','BiMed','Brach',...
+        'Brad','DeltAnt','DeltMid','DeltPos',...
+        'ECRb','ECU',...
+        'EDC','FCR','FCU',...
+        'FDS','InfSpin',...
+        'Lat','PecSup',...
+        'PecInf'...
+        'TerMaj','TriLat','TriMid','TriMed',};
+
+    muscAvgNeurEval = emgMuscAvgNeurEval;
+
+
+    %find numMuscles best muscles pR2 for each unit
+    numMuscles = 5;
+    
+    %pre-allocate arrays
+    linAct = zeros(1,numel(muscAvgNeurEval(:,1,1)));
+    nonlinAct = zeros(1,numel(muscAvgNeurEval(:,1,1)));
+    linPas = zeros(1,numel(muscAvgNeurEval(:,1,1)));
+    nonlinPas = zeros(1,numel(muscAvgNeurEval(:,1,1)));
+    unitMuscles = strings(numMuscles,numel(muscAvgNeurEval(:,1,1)));
+    
+    %loop through each unit
+    for n=1:numel(muscAvgNeurEval(:,1,1))
+        
+        %find best muscles pR2 evaluated in act
+        [maxLinAct, maxLinActInd] = maxk(muscAvgNeurEval(n,3,:),numMuscles);
+        bestMuscLinAct = reshape(permute(maxLinAct,[3,2,1]),[1,numMuscles]);
+        maxLinActInd = reshape(permute(maxLinActInd,[3,2,1]),[1,numMuscles]);
+        [maxNonlinAct, maxNonlinActInd] = maxk(muscAvgNeurEval(n,4,:),numMuscles);
+        bestMuscNonlinAct = reshape(permute(maxNonlinAct,[3,2,1]),[1,numMuscles]);
+        maxNonlinActInd = reshape(permute(maxNonlinActInd,[3,2,1]),[1,numMuscles]);
+        %find best muscles pR2 evaluated in pas
+        [maxLinPas, maxLinPasInd] = maxk(muscAvgNeurEval(n,5,:),numMuscles);
+        bestMuscLinPas = reshape(permute(maxLinPas,[3,2,1]),[1,numMuscles]);
+        maxLinPasInd = reshape(permute(maxLinPasInd,[3,2,1]),[1,numMuscles]);
+        [maxNonlinPas, maxNonlinPasInd] = maxk(muscAvgNeurEval(n,6,:),numMuscles);
+        bestMuscNonlinPas = reshape(permute(maxNonlinPas,[3,2,1]),[1,numMuscles]);
+        maxNonlinPasInd = reshape(permute(maxNonlinPasInd,[3,2,1]),[1,numMuscles]);
+        
+        %%FOR COMPARING MEAN PR2 OF SAME MUSCLES ACROSS 4 CATEGORIES
+        %find best group of muscles
+        meanLinAct = mean(bestMuscLinAct);
+        meanNonlinAct = mean(bestMuscNonlinAct);
+        meanLinPas = mean(bestMuscLinPas);
+        meanNonlinPas = mean(bestMuscNonlinPas);
+        [bestGroup,bestGroupIdx] = maxk([meanLinAct meanNonlinAct meanLinPas meanNonlinPas],1);
+        if bestGroupIdx==1
+            checkMuscles = maxLinActInd;
+        elseif bestGroupIdx==2
+            checkMuscles = maxNonlinActInd;
+        elseif bestGroupIdx==3
+            checkMuscles = maxLinPasInd;
+        elseif bestGroupIdx==4
+            checkMuscles = maxNonlinPasInd;
+        end
+        bestMuscLinAct = reshape(permute(muscAvgNeurEval(n,3,checkMuscles),[3,2,1]),[1,numMuscles]);
+        bestMuscNonlinAct = reshape(permute(muscAvgNeurEval(n,4,checkMuscles),[3,2,1]),[1,numMuscles]);
+        bestMuscLinPas = reshape(permute(muscAvgNeurEval(n,5,checkMuscles),[3,2,1]),[1,numMuscles]);
+        bestMuscNonlinPas = reshape(permute(muscAvgNeurEval(n,6,checkMuscles),[3,2,1]),[1,numMuscles]);
+        
+        %save top muscles for unit
+        for c=1:numel(checkMuscles)
+            unitMuscles{c,n} = muscleArray{checkMuscles(1,c)};
+        end
+        
+        %find mean of 5 best muscle group for each category
+        meanLinAct = mean(bestMuscLinAct);
+        meanNonlinAct = mean(bestMuscNonlinAct);
+        meanLinPas = mean(bestMuscLinPas);
+        meanNonlinPas = mean(bestMuscNonlinPas);
+
+        %add this unit pR2 values to master lists
+        linAct(1,n) = meanLinAct;
+        nonlinAct(1,n) = meanNonlinAct;
+        linPas(1,n) = meanLinPas;
+        nonlinPas(1,n) = meanNonlinPas;
+    end
+    
+    %scatter plots
+    low = -1;
+    high = 1;
+    step = 0.25;
+    fig1 = figure('Name','Kinematics/EMG Active/Passive comparison across units');
+    sgtitle('Kinematics/EMG Active/Passive comparison across units');
+    x = [low:high];
+    y = x;
+    
+    subplot(2,2,1);
+    scatter(linAct,linPas,'filled')
+    title('Kinematics active vs. passive');
+    xlabel('Kinematics Active pR2')
+    ylabel('Kinematics Passive pR2')
+    xlim([low high])
+    set(gca,'XTick',low:step:high)
+    ylim([low high])
+    set(gca,'YTick',low:step:high)
+    hold on
+    plot(x,y)
+    
+    subplot(2,2,2);
+    scatter(nonlinAct,nonlinPas,'filled')
+    title('EMG active vs. passive');
+    xlabel('EMG Active pR2')
+    ylabel('EMG Passive pR2')
+    xlim([low high])
+    set(gca,'XTick',low:step:high)
+    ylim([low high])
+    set(gca,'YTick',low:step:high)
+    hold on
+    plot(x,y)
+    
+    subplot(2,2,3);
+    scatter(linAct,nonlinAct,'filled')
+    title('Active Kinematics vs EMG');
+    xlabel('Active Kinematics pR2')
+    ylabel('Active EMG pR2')
+    xlim([low high])
+    set(gca,'XTick',low:step:high)
+    ylim([low high])
+    set(gca,'YTick',low:step:high)
+    hold on
+    plot(x,y)
+    
+    subplot(2,2,4);
+    scatter(linPas,nonlinPas,'filled')
+    title('Passive Kinematics vs EMG');
+    xlabel('Passive Kinematics pR2')
+    ylabel('Passive EMG pR2')
+    xlim([low high])
+    set(gca,'XTick',low:step:high)
+    ylim([low high])
+    set(gca,'YTick',low:step:high)
+    hold on
+    plot(x,y)
+    
+    clear maxLinAct maxLinActInd bestMuscLinAct
+    clear maxNonlinAct maxNonlinActInd bestMuscNonlinAct
+    clear maxLinPas maxLinPasInd bestMuscLinPas
+    clear maxNonlinPas maxNonlinPasInd bestMuscNonlinPas
+    clear linActInd linPasInd nonlinActInd nonlinPasInd
+    clear bests j check indexes addition muscleLabels x
+    clear n c
+    clear meanLinAct meanLinPas meanNonlinAct meanNonlinPas
+    clear meanAct meanPas meanLin meanNonlin
+    clear checkMuscles muscleArray1
 
 %% hack-y way to get scatter plots from normalized models
 for d=1:size(multiExp4dArray,4)
