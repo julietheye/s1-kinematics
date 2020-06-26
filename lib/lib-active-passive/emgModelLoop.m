@@ -1,4 +1,4 @@
-function [emgMuscAvgNeurEval,columnNames] = emgModelLoop(trial_data_cell,td_trim,params)
+function [emgMuscAvgNeurEval,emgMuscNeurEval,columnNames] = emgModelLoop(trial_data_cell,td_trim,params)
     
     %default params
     arrayname = 'S1';
@@ -27,6 +27,7 @@ function [emgMuscAvgNeurEval,columnNames] = emgModelLoop(trial_data_cell,td_trim
         'TerMaj','TriLat','TriMid','TriMed',};
     assignParams(who,params); %overwrite params
     
+    emgMuscNeurEval = [];
     emgMuscAvgNeurEval = [];
 
     for muscleNum=1:length(muscleArray)
@@ -153,7 +154,11 @@ function [emgMuscAvgNeurEval,columnNames] = emgModelLoop(trial_data_cell,td_trim
             'do_ci',false,...
             'do_nanmean',true));
 
-        % save each muscle into 3d array
+        % save each muscle neuron_eval into 3d array
+        currentNeurEval = table2array(neuron_eval(:,6:end));
+        emgMuscNeurEval = cat(3,emgMuscNeurEval,currentNeurEval);
+        
+        % save each muscle avg_neuron_eval into 3d array
         currentMuscleTable = table2array(avg_neuron_eval(:,5:end));
         emgMuscAvgNeurEval = cat(3,emgMuscAvgNeurEval,currentMuscleTable);
     end

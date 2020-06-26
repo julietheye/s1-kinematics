@@ -1,4 +1,4 @@
-function emgNeurCondensedTable = kinVsEMG(muscAvgNeurEval,columnNames,params)
+function [emgNeurCondensedTable,emgCondensedNeurEval] = kinVsEMG(muscAvgNeurEval,muscNeurEval,columnNames,params)
 
     %default params
     muscleArray = {'bicep_lh','bicep_sh','brachialis',...
@@ -20,6 +20,7 @@ function emgNeurCondensedTable = kinVsEMG(muscAvgNeurEval,columnNames,params)
     emgPas = zeros(1,numel(muscAvgNeurEval(:,1,1)));
     unitMuscles = strings(numMuscles,numel(muscAvgNeurEval(:,1,1)));
     kinEmgCondensedTable = zeros(numel(muscAvgNeurEval(:,1,1)),16,numMuscles);
+    kinEmgCondensedNeurEval = zeros(numel(muscNeurEval(:,1,1)),16,numMuscles);
 
     %loop through each unit
     for n=1:numel(muscAvgNeurEval(:,1,1))
@@ -59,8 +60,13 @@ function emgNeurCondensedTable = kinVsEMG(muscAvgNeurEval,columnNames,params)
         bestMuscEMGAct = reshape(permute(muscAvgNeurEval(n,4,checkMuscles),[3,2,1]),[1,numMuscles]);
         bestMuscKinPas = reshape(permute(muscAvgNeurEval(n,5,checkMuscles),[3,2,1]),[1,numMuscles]);
         bestMuscEMGPas = reshape(permute(muscAvgNeurEval(n,6,checkMuscles),[3,2,1]),[1,numMuscles]);
-
+        
+        %save current unit table (checkMuscles only)
         kinEmgCondensedTable(n,:,:) = muscAvgNeurEval(n,:,checkMuscles);
+        %want every 53rd row
+        for x=1:100
+            kinEmgCondensedNeurEval(n+53*(x-1),:,:) = muscNeurEval(n+53*(x-1),:,checkMuscles);
+        end
 
         %save top muscles for unit
         for c=1:numel(checkMuscles)
@@ -81,7 +87,8 @@ function emgNeurCondensedTable = kinVsEMG(muscAvgNeurEval,columnNames,params)
     end
 
     emgNeurCondensedTable = mean(kinEmgCondensedTable,3);
-    emgNeurCondensedTable = table(emgNeurCondensedTable,'VariableNames',columnNames);
+    emgCondensedNeurEval = mean(kinEmgCondensedNeurEval,3);
+    %emgNeurCondensedTable = table(emgNeurCondensedTable,'VariableNames',columnNames);
 
     if doPlots
         %scatter plots

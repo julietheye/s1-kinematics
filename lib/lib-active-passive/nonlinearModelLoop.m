@@ -1,4 +1,4 @@
-function [multiExp4dArray,columnNames] = nonlinearModelLoop(trial_data_cell,td_trim,params)
+function [multiExp4dArray,multiExp4dNeurEval,columnNames] = nonlinearModelLoop(trial_data_cell,td_trim,params)
 
     %default params
     arrayname = 'S1';
@@ -12,15 +12,17 @@ function [multiExp4dArray,columnNames] = nonlinearModelLoop(trial_data_cell,td_t
             'lat_dorsi_sup','lat_dorsi_cen','lat_dorsi_inf','pectoralis_sup',...
             'pectoralis_inf',...
             'teres_major','tricep_lat','tricep_lon','tricep_sho'};
-    exponents = [0.6:0.1:0.9,2:1:5];
+    exponents = [1];
     assignParams(who,params); %overwrite params
     
     td = trial_data_cell{1};
     multiExp4dArray = zeros(size(td(1).S1_spikes,2),8,numel(muscleArray),numel(exponents));
+    multiExp4dNeurEval = zeros(size(td(1).S1_spikes,2)*100,8,numel(muscleArray),numel(exponents));
     for d=1:numel(exponents)
         curExp = exponents(d);
 
         allMuscAvgNeurEval = [];
+        allMuscNeurEval = [];
 
         for muscleNum=1:length(muscleArray)
 
@@ -143,6 +145,10 @@ function [multiExp4dArray,columnNames] = nonlinearModelLoop(trial_data_cell,td_t
                 'keycols',{{'monkey','date','task','signalID'}},...
                 'do_ci',false,...
                 'do_nanmean',true));
+            
+            % save each muscle neureval
+            currentMuscleNeurEval = table2array(neuron_eval(:,6:end));
+            allMuscNeurEval = cat(3,allMuscNeurEval,currentMuscleNeurEval);
 
             % save each muscle into 3d array
             currentMuscleTable = table2array(avg_neuron_eval(:,5:end));
@@ -150,6 +156,7 @@ function [multiExp4dArray,columnNames] = nonlinearModelLoop(trial_data_cell,td_t
         end
 
         multiExp4dArray(:,:,:,d) = allMuscAvgNeurEval(:,:,:,1);
+        multiExp4dNeurEval(:,:,:,d) = allMuscNeurEval(:,:,:,1);
     end
     
     temp = avg_neuron_eval;

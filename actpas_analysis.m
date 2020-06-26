@@ -260,24 +260,34 @@
 
 %% Loop through results to pull out relevant info
 
-model_aliases = {'muscLin','muscEMG'};
-models_to_plot = {neural_signals,'muscLin','muscEMG'};
-model_titles = {'Actual Firing','Muscle Kinematics','Muscle Kin and EMG'};
+model_aliases = {'muscLin'};
+models_to_plot = {neural_signals,'muscLin'};
+model_titles = {'Actual Firing','Muscle Kin'};
 
-%for linear or nonlinear kinematics (normalized) loop
+%for linear 
+if max(strcmp(model_aliases,{'muscLin'}))==1
+    [multiExp4dArray,multiExp4dNeurEval,linColumnNames] = nonlinearModelLoop(trial_data_cell,td_trim,struct(...
+                        'arrayname',arrayname,...
+                        'model_aliases',{model_aliases},...
+                        'models_to_plot',{models_to_plot}));
+end
+
+%for nonlinear kinematics (normalized) loop
 if max(strcmp(model_aliases,{'muscNonlin'}))==1
     exponents = [0.5];
-    [multiExp4dArray,columnNames] = nonlinearModelLoop(trial_data_cell,td_trim,struct(...
+    [multiExp4dArray,multiExp4dNeurEval,nonlinColumnNames] = nonlinearModelLoop(trial_data_cell,td_trim,struct(...
                         'arrayname',arrayname,...
                         'model_aliases',{model_aliases},...
                         'models_to_plot',{models_to_plot},...
                         'exponents',exponents));
 end
+
+%for emg loop
 if max(strcmp(model_aliases,{'muscEMG'}))==1 || max(strcmp(model_aliases,{'EMGonly'}))==1
     %muscleArray must match emgMuscleArray
     bumpDuration = 0.125/td(1).bin_size; %(not in this TD, but can get it from CDS)
     endofMove = 18; %window (bins) between end of bump and end of movement
-    [emgMuscAvgNeurEval,columnNames] = emgModelLoop(trial_data_cell,td_trim,struct(...
+    [emgMuscAvgNeurEval,emgMuscNeurEval,columnNames] = emgModelLoop(trial_data_cell,td_trim,struct(...
                         'arrayname',arrayname,...
                         'model_aliases',{model_aliases},...
                         'models_to_plot',{models_to_plot},...
@@ -294,32 +304,50 @@ end
     %load('linearNormalizedOnlyTable.mat')
     %load('emgMuscAvgNeurEval-kinVsEMG.mat')
     
+    %load the corresponding neur_eval tables (5300x8x21)
+    
     %make any necessary changes
     %removed 'lat_dorsi_sup','lat_dorsi_inf' bec only one lat emg muscle
-    linearMuscleTableMod = linearMuscleTable;
+    linearMuscleTableMod = muscLinAvgNeurEval;
     linearMuscleTableMod(:,:,[15,17]) = [];
+    linearMuscleNeurEvalMod = muscLinNeurEval;
+    linearMuscleNeurEvalMod(:,:,[15,17]) = [];
     
     %two models to be combined
     model1table = linearMuscleTableMod;
+    model1neureval = linearMuscleNeurEvalMod;
+    model1vars = linColumnNames;
     model2table = emgMuscAvgNeurEval;
+    model2neureval = emgMuscNeurEval;
+    model2vars = columnNames;
     
-    combinedTable = zeros(size(model2table,1),16,size(model2table,1));
+    combinedTable = zeros(size(model2table,1),16,size(model2table,3));
+    combinedNeurEval = zeros(size(model2neureval,1),16,size(model2neureval,3));
+    combinedVars = strings(1,16);
     j = 1;
     for i=1:8
         combinedTable(:,j,:) = model1table(:,i,:);
+        combinedNeurEval(:,j,:) = model1neureval(:,i,:);
+        combinedVars(1,j) = model1vars(1,i);
         j=j+1;
         combinedTable(:,j,:) = model2table(:,i,:);
+        combinedNeurEval(:,j,:) = model2neureval(:,i,:);
+        combinedVars(1,j) = model2vars(1,i);
         j=j+1;
     end
     
 % evaluate kinematics vs EMG
     muscAvgNeurEval = combinedTable; %set correct table (containing eval from 2 models combined)
+    muscNeurEval = combinedNeurEval; %set correct neur eval (for stats)
+    columnNames = combinedVars; %set correct vars (16 cols)
     numMuscles = 5; %find numMuscles best muscles pR2 for each unit
     doPlots = true; %scatter plots, no stats
 
-    emgNeurCondensedTable = kinVsEMG(muscAvgNeurEval,columnNames,struct(...
+    [emgNeurCondensedTable,emgCondensedNeurEval] = kinVsEMG(muscAvgNeurEval,muscNeurEval,columnNames,struct(...
                                 'numMuscles',numMuscles,...
                                 'doPlots',doPlots));
+                            
+%save condensedTable, condensedNeurEval, and combinedVars
 
 %% evaluate lin vs nonlinear
 
@@ -367,127 +395,150 @@ end
                     'numMuscles',numMuscles,...
                     'doPlots',doPlots));
 
-%% make plots for condensed neurEval tables
+%% make plots for condensed neurEval tables w stats!
 
-model_pairs = {'kinematics','EMG'};
-models_to_plot = {neural_signals,'muscLin','EMG'};
+model_pairs = {'muscLin','muscEMG'};
+models_to_plot = {neural_signals,'muscLin','muscEMG'};
+model_titles = {'Muscle Kinematics','Muscle Kin and EMG'};
 
-
-    % compare pR2 of handelbow vs ext
-    figure('defaultaxesfontsize',18)
-    for pairnum = 1:size(model_pairs,1)
-        for monkeynum = 1:length(monkey_names)
-            % set subplot...
-            subplot(size(model_pairs,1),length(monkey_names),...
-                (pairnum-1)*length(monkey_names)+monkeynum)
-            plot([-0.4 0.6],[-0.4 0.6],'k--','linewidth',0.5)
-            hold on
-            plot([0 0],[-0.4 0.6],'k-','linewidth',0.5)
-            plot([-0.4 0.6],[0 0],'k-','linewidth',0.5)
+% compare pR2 of handelbow vs ext
+figure('defaultaxesfontsize',18)
+for pairnum = 1:size(model_pairs,1)
+    for monkeynum = 1:length(monkey_names)
+        % set subplot...
+        subplot(size(model_pairs,1),length(monkey_names),...
+            (pairnum-1)*length(monkey_names)+monkeynum)
+        plot([-0.4 0.6],[-0.4 0.6],'k--','linewidth',0.5)
+        hold on
+        plot([0 0],[-0.4 0.6],'k-','linewidth',0.5)
+        plot([-0.4 0.6],[0 0],'k-','linewidth',0.5)
 
 %             % get sessions
 %             [~,monkey_evals] = getNTidx(neuron_eval,'monkey',monkey_names{monkeynum});
 %             session_dates = unique(monkey_evals.date);
 % 
 %             for sessionnum = 1:length(session_dates)
-                [~,session_evals] = getNTidx(monkey_evals,'date',session_dates{sessionnum});
-                pr2_winners = compareEncoderMetrics(session_evals,struct(...
+%                 [~,session_evals] = getNTidx(monkey_evals,'date',session_dates{sessionnum});
+            sessionnum = 1;
+            avgNeurEval = emgNeurCondensedTable;
+            neurEval = emgCondensedNeurEval;
+            colNames = combinedVars;
+            pr2_winners = compareEncoderMetricsMod(avgNeurEval,neurEval,colNames,struct(...
+                'bonferroni_correction',6,...
+                'models',{models_to_plot},...
+                'model_pairs',{model_pairs},...
+                'postfix','_eval',...
+                'num_repeats',20,...
+                'num_folds',5));
+
+%                 [~,avg_pR2] = getNTidx(avg_neuron_eval,'monkey',monkey_names{monkeynum},'date',session_dates{sessionnum});
+            avg_pR2 = avgNeurEval;
+
+            % scatter filled circles if there's a winner, empty circles if not
+            no_winner =  cellfun(@isempty,pr2_winners(pairnum,:));
+            idx1 = strcmp(colNames,strcat(model_pairs{1},'_eval'));
+            idx2 = strcmp(colNames,strcat(model_pairs{2},'_eval'));
+            scatterlims(...
+                [-0.4 0.6],...
+                [-0.4 0.6],...
+                avg_pR2(no_winner,idx1),...
+                avg_pR2(no_winner,idx2),...
+                [],session_colors(sessionnum,:))
+            scatterlims(...
+                [-0.4 0.6],...
+                [-0.4 0.6],...
+                avg_pR2(~no_winner,idx1),...
+                avg_pR2(~no_winner,idx2),...
+                [],session_colors(sessionnum,:),'filled')
+%             end
+
+        % make axes pretty
+        set(gca,'box','off','tickdir','out')
+        axis image
+        if monkeynum ~= 1 || pairnum ~= 1
+            set(gca,'box','off','tickdir','out',...
+                'xtick',[],'ytick',[])
+        end
+        xlabel(sprintf('%s pR2',model_titles{pairnum,1}))
+        ylabel(sprintf('%s pR2',model_titles{pairnum,2}))
+    end
+end
+
+%% Plot within condition vs across condition pR2 for each neuron in all sessions
+conds = {'act','pas'};
+model_pairs = {'muscLin','muscEMG'};
+models_to_plot = {neural_signals,'muscLin','muscEMG'};
+model_titles = {'Muscle Kinematics','Muscle Kin and EMG'};
+    
+for modelnum = 2:length(models_to_plot)
+    figure('defaultaxesfontsize',18)
+    for monkeynum = 1:length(monkey_names)
+        for condnum = 1:2
+            % set subplot
+            subplot(2,length(monkey_names),(condnum-1)*length(monkey_names)+monkeynum)
+            plot([-0.7 0.7],[-0.7 0.7],'k--','linewidth',0.5)
+            hold on
+            plot([0 0],[-0.7 0.7],'k-','linewidth',0.5)
+            plot([-0.7 0.7],[0 0],'k-','linewidth',0.5)
+
+            % get sessions
+%             [~,monkey_evals] = getNTidx(neuron_eval,'monkey',monkey_names{monkeynum});
+%             session_dates = unique(monkey_evals.date);
+% 
+%             % plot out each session
+%             for sessionnum = 1:length(session_dates)
+%                 [~,avg_pR2] = getNTidx(avg_neuron_eval,'monkey',monkey_names{monkeynum},'date',session_dates{sessionnum});
+% 
+%                 [~,session_evals] = getNTidx(monkey_evals,'date',session_dates{sessionnum});
+                sessionnum = 1;
+                avgNeurEval = emgNeurCondensedTable;
+                neurEval = emgCondensedNeurEval;
+                colNames = combinedVars;
+
+                pr2_winners = compareEncoderMetricsMod(avgNeurEval,neurEval,colNames,struct(...
                     'bonferroni_correction',6,...
                     'models',{models_to_plot},...
                     'model_pairs',{model_pairs},...
-                    'postfix','_eval'));
+                    'postfix','_eval',...
+                    'num_repeats',20,...
+                    'num_folds',5));
 
-                [~,avg_pR2] = getNTidx(avg_neuron_eval,'monkey',monkey_names{monkeynum},'date',session_dates{sessionnum});
-                % scatter filled circles if there's a winner, empty circles if not
-                no_winner =  cellfun(@isempty,pr2_winners(pairnum,:));
+                % fill by whether separable or not?
+%                 sig_seps = avg_pR2.S1_FR_indiv_sep_CI_lo > 0.5;
+
+                % fill by whether winner of comparison with ext or not?
+                no_winner =  cellfun(@isempty,pr2_winners(1,:));
+                avg_pR2 = avgNeurEval;
+                idx1 = strcmp(colNames,sprintf('%s_%s_eval',models_to_plot{modelnum},conds{condnum}));
+                idx2 = strcmp(colNames,sprintf('%s_train_%s_eval',models_to_plot{modelnum},conds{condnum}));
+
                 scatterlims(...
-                    [-0.4 0.6],...
-                    [-0.4 0.6],...
-                    avg_pR2.(strcat(model_pairs{pairnum,1},'_eval'))(no_winner),...
-                    avg_pR2.(strcat(model_pairs{pairnum,2},'_eval'))(no_winner),...
-                    [],session_colors(sessionnum,:))
-                scatterlims(...
-                    [-0.4 0.6],...
-                    [-0.4 0.6],...
-                    avg_pR2.(strcat(model_pairs{pairnum,1},'_eval'))(~no_winner),...
-                    avg_pR2.(strcat(model_pairs{pairnum,2},'_eval'))(~no_winner),...
+                    [-0.7 0.7],...
+                    [-0.7 0.7],...
+                    avg_pR2(no_winner,idx1),...
+                    avg_pR2(no_winner,idx2),...
                     [],session_colors(sessionnum,:),'filled')
-            end
-
+                scatterlims(...
+                    [-0.7 0.7],...
+                    [-0.7 0.7],...
+                    avg_pR2(~no_winner,idx1),...
+                    avg_pR2(~no_winner,idx2),...
+                    [],session_colors(sessionnum,:),'filled')
+%             end
             % make axes pretty
-            set(gca,'box','off','tickdir','out')
-            axis image
-            if monkeynum ~= 1 || pairnum ~= 1
-                set(gca,'box','off','tickdir','out',...
-                    'xtick',[],'ytick',[])
-            end
-            xlabel(sprintf('%s pR2',getModelTitles(model_pairs{pairnum,1})))
-            ylabel(sprintf('%s pR2',getModelTitles(model_pairs{pairnum,2})))
+            set(gca,'box','off','tickdir','out',...
+                'xlim',[-0.7 0.7],'ylim',[-0.7 0.7])
+            axis equal
+            % if monkeynum ~= 1 || condnum ~= 1
+            %     set(gca,'box','off','tickdir','out',...
+            %         'xtick',[],'ytick',[])
+            % end
+            xlabel(sprintf('%s pR2, trained full, tested %s',model_titles{modelnum-1},conds{condnum}),'FontSize',15)
+            ylabel(sprintf('%s pR2, trained %s, tested %s',model_titles{modelnum-1},conds{condnum},conds{condnum}),'FontSize',10)
         end
-%     end
-
-    % Plot within condition vs across condition pR2 for each neuron in all sessions
-    conds = {'act','pas'};
-    model_pairs = {'extAccel','markers_pcaAccel'};
-    for modelnum = 2:length(models_to_plot)
-        figure('defaultaxesfontsize',18)
-        for monkeynum = 1:length(monkey_names)
-            for condnum = 1:2
-                % set subplot
-                subplot(2,length(monkey_names),(condnum-1)*length(monkey_names)+monkeynum)
-                plot([-0.7 0.7],[-0.7 0.7],'k--','linewidth',0.5)
-                hold on
-                plot([0 0],[-0.7 0.7],'k-','linewidth',0.5)
-                plot([-0.7 0.7],[0 0],'k-','linewidth',0.5)
-
-                % get sessions
-                [~,monkey_evals] = getNTidx(neuron_eval,'monkey',monkey_names{monkeynum});
-                session_dates = unique(monkey_evals.date);
-
-                % plot out each session
-                for sessionnum = 1:length(session_dates)
-                    [~,avg_pR2] = getNTidx(avg_neuron_eval,'monkey',monkey_names{monkeynum},'date',session_dates{sessionnum});
-                    
-                    [~,session_evals] = getNTidx(monkey_evals,'date',session_dates{sessionnum});
-                    pr2_winners = compareEncoderMetrics(session_evals,struct(...
-                        'bonferroni_correction',6,...
-                        'models',{models_to_plot},...
-                        'model_pairs',{model_pairs},...
-                        'postfix','_eval'));
-
-                    % fill by whether separable or not?
-                    sig_seps = avg_pR2.S1_FR_indiv_sep_CI_lo > 0.5;
-                    
-                    % fill by whether winner of comparison with ext or not?
-                    no_winner =  cellfun(@isempty,pr2_winners(1,:));
-
-                    scatterlims(...
-                        [-0.7 0.7],...
-                        [-0.7 0.7],...
-                        avg_pR2.(sprintf('%s_%s_eval',models_to_plot{modelnum},conds{condnum}))(no_winner),...
-                        avg_pR2.(sprintf('%s_train_%s_eval',models_to_plot{modelnum},conds{condnum}))(no_winner),...
-                        [],session_colors(sessionnum,:),'filled')
-                    scatterlims(...
-                        [-0.7 0.7],...
-                        [-0.7 0.7],...
-                        avg_pR2.(sprintf('%s_%s_eval',models_to_plot{modelnum},conds{condnum}))(~no_winner),...
-                        avg_pR2.(sprintf('%s_train_%s_eval',models_to_plot{modelnum},conds{condnum}))(~no_winner),...
-                        [],session_colors(sessionnum,:),'filled')
-                end
-                % make axes pretty
-                set(gca,'box','off','tickdir','out',...
-                    'xlim',[-0.7 0.7],'ylim',[-0.7 0.7])
-                axis equal
-                % if monkeynum ~= 1 || condnum ~= 1
-                %     set(gca,'box','off','tickdir','out',...
-                %         'xtick',[],'ytick',[])
-                % end
-                xlabel(sprintf('%s pR2, trained full, tested %s',getModelTitles(models_to_plot{modelnum}),conds{condnum}))
-                ylabel(sprintf('%s pR2, trained %s, tested %s',getModelTitles(models_to_plot{modelnum}),conds{condnum},conds{condnum}))
-            end
-        end
-        % suptitle('Full pR^2 vs within condition pR^2')
     end
+    % suptitle('Full pR^2 vs within condition pR^2')
+end
 
     
     
