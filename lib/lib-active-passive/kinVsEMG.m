@@ -11,6 +11,13 @@ function [emgNeurCondensedTable,emgCondensedNeurEval] = kinVsEMG(muscAvgNeurEval
         'teres_major','tricep_lat','tricep_lon','tricep_sho'};
     numMuscles = 5; %find numMuscles best muscles pR2 for each unit
     doPlots = true;
+    %for stats
+    arrayname = 'S1';
+    neural_signals = [arrayname '_FR'];
+    num_repeats = 20;
+    num_folds = 5;
+    model_pairs = {'muscLin','muscEMG'};
+    models_to_plot = {neural_signals,'muscLin','muscEMG'};
     assignParams(who,params); %overwrite params
 
     %pre-allocate arrays
@@ -90,6 +97,26 @@ function [emgNeurCondensedTable,emgCondensedNeurEval] = kinVsEMG(muscAvgNeurEval
     emgCondensedNeurEval = mean(kinEmgCondensedNeurEval,3);
     %emgNeurCondensedTable = table(emgNeurCondensedTable,'VariableNames',columnNames);
 
+    %stats to compare act models
+    act_pr2_winners = compareEncoderMetricsMod(emgNeurCondensedTable,emgCondensedNeurEval,columnNames,struct(...
+                    'bonferroni_correction',6,...
+                    'models',{models_to_plot},...
+                    'model_pairs',{model_pairs},...
+                    'postfix','_act_eval',...
+                    'num_repeats',num_repeats,...
+                    'num_folds',num_folds));
+    %stats to compare pas models
+    pas_pr2_winners = compareEncoderMetricsMod(emgNeurCondensedTable,emgCondensedNeurEval,columnNames,struct(...
+                    'bonferroni_correction',6,...
+                    'models',{models_to_plot},...
+                    'model_pairs',{model_pairs},...
+                    'postfix','_pas_eval',...
+                    'num_repeats',num_repeats,...
+                    'num_folds',num_folds));
+                
+    act_no_winner =  cellfun(@isempty,act_pr2_winners(1,:));
+    pas_no_winner =  cellfun(@isempty,pas_pr2_winners(1,:));
+    
     if doPlots
         %scatter plots
         low = -1;
@@ -125,7 +152,9 @@ function [emgNeurCondensedTable,emgCondensedNeurEval] = kinVsEMG(muscAvgNeurEval
         plot(x,y)
 
         subplot(2,2,3);
-        scatter(kinAct,emgAct,'filled')
+        scatter(kinAct(1,act_no_winner),emgAct(1,act_no_winner),'MarkerEdgeColor',[0.4, 0.76, 0.64])
+        hold on
+        scatter(kinAct(1,~act_no_winner),emgAct(1,~act_no_winner),'filled','MarkerFaceColor',[0.4, 0.76, 0.64])
         title('Active Kinematics vs EMG');
         xlabel('Active Kinematics pR2')
         ylabel('Active EMG pR2')
@@ -137,7 +166,9 @@ function [emgNeurCondensedTable,emgCondensedNeurEval] = kinVsEMG(muscAvgNeurEval
         plot(x,y)
 
         subplot(2,2,4);
-        scatter(kinPas,emgPas,'filled')
+        scatter(kinPas(1,pas_no_winner),emgPas(1,pas_no_winner),'MarkerEdgeColor',[0.4, 0.76, 0.64])
+        hold on
+        scatter(kinPas(1,~pas_no_winner),emgPas(1,~pas_no_winner),'filled','MarkerFaceColor',[0.4, 0.76, 0.64])
         title('Passive Kinematics vs EMG');
         xlabel('Passive Kinematics pR2')
         ylabel('Passive EMG pR2')
