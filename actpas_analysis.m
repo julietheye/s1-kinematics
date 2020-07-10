@@ -65,7 +65,12 @@
             spikes(:,unsorted_units) = [];
             td(trialnum).(sprintf('%s_spikes',arrayname)) = spikes;
         end
-    
+        
+        %normalize emg via range to min and max in session for each muscle
+        for m = 1:numel(td.emg_names)
+            td.emg(:,m) = normalize(td.emg(:,m),'range');
+        end
+            
         % prep trial data by getting only rewards and trimming to only movements
         % split into trials
         td = splitTD(...
@@ -262,9 +267,9 @@
 
 model_aliases = {'muscLin'};
 models_to_plot = {neural_signals,'muscLin'};
-model_titles = {'Actual Firing','Muscle Kin'};
+%model_titles = {'Actual Firing','Muscle Kin'};
 
-%for linear 
+%linear model
 if max(strcmp(model_aliases,{'muscLin'}))==1
     [multiExp4dArray,multiExp4dNeurEval,linColumnNames] = nonlinearModelLoop(trial_data_cell,td_trim,struct(...
                         'arrayname',arrayname,...
@@ -295,6 +300,9 @@ if max(strcmp(model_aliases,{'muscEMG'}))==1 || max(strcmp(model_aliases,{'EMGon
                         'endofMove',endofMove));
 end
 
+%emg model (emg normalized), NO looping
+
+
 %% evaluate kin vs emg
 
 % if resulting table from previous section is for one model only,
@@ -308,9 +316,9 @@ end
     
     %make any necessary changes
     %removed 'lat_dorsi_sup','lat_dorsi_inf' bec only one lat emg muscle
-    linearMuscleTableMod = muscLinAvgNeurEval;
+    linearMuscleTableMod = linModelAvgNeurEval;
     linearMuscleTableMod(:,:,[15,17]) = [];
-    linearMuscleNeurEvalMod = muscLinNeurEval;
+    linearMuscleNeurEvalMod = linModelNeurEval;
     linearMuscleNeurEvalMod(:,:,[15,17]) = [];
     
     %two models to be combined

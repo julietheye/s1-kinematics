@@ -8,8 +8,12 @@ function results = actpasSep(td_bin,params)
         num_pcs = 5; % number of PCs to train LDA on
         model_type = 'glm';
         model_aliases = {'ext','markers_pca'};
+        %for single-muscle input emg models
         muscle = [];
         emg = [];
+        %for all muscle input emg models
+        muscleIndeces = [];
+        emgIndeces = [];
         L0 = 1;
         neural_signals = 'S1_FR';
         which_units = 'all'; % replace with a list of indices for which units to use for separability
@@ -86,6 +90,32 @@ function results = actpasSep(td_bin,params)
                 glm_params{modelnum} = struct('model_type',model_type,...
                                         'model_name',[model_aliases{modelnum} '_model'],...
                                         'in_signals',{{'emg',emg_idx}},...
+                                        'out_signals',neural_signals);
+                                    
+            case 'allMuscEMG'
+                glm_params{modelnum} = struct('model_type',model_type,...
+                                        'model_name',[model_aliases{modelnum} '_model'],...
+                                        'in_signals',{{'muscle_len',muscleIndeces;'muscle_vel',muscleIndeces;'emg',emgIndeces}},...
+                                        'out_signals',neural_signals);
+                                    
+            case 'muscEMGpca'
+                % Do PCA on muscle length, velocity, and EMG combined for
+                % all muscles
+                PCAparams = struct('signals',{'muscle_len',muscleIndeces;'muscle_vel',muscleIndeces;'emg',emgIndeces}, 'do_plot',false);
+                [td_bin,~] = dimReduce(td_bin,PCAparams);
+                glm_params{modelnum} = struct('model_type',model_type,...
+                                        'model_name',[model_aliases{modelnum} '_model'],...
+                                        'in_signals',{{'muscle_len_pca',1:num_musc_pcs;'muscle_vel_pca',1:num_musc_pcs}},...
+                                        'out_signals',neural_signals);
+                                    
+            case 'muscPca'
+                % Do PCA on muscle length and velocity (kin only)combined for
+                % all muscles
+                PCAparams = struct('signals',{'muscle_len',muscleIndeces;'muscle_vel',muscleIndeces}, 'do_plot',false);
+                [td_bin,~] = dimReduce(td_bin,PCAparams);
+                glm_params{modelnum} = struct('model_type',model_type,...
+                                        'model_name',[model_aliases{modelnum} '_model'],...
+                                        'in_signals',{{'muscle_len_pca',1:num_musc_pcs;'muscle_vel_pca',1:num_musc_pcs}},...
                                         'out_signals',neural_signals);
 
             case 'ext'

@@ -94,15 +94,15 @@ function [emgMuscAvgNeurEval,emgMuscNeurEval,columnNames] = emgModelLoop(trial_d
             %normalize
             muscleIndex = find(ismember(td_trim(1).muscle_names,muscleArray(muscleNum)));
             for tr=1:numel(td)
-                td(tr).muscle_len(:,muscleNum) = td(tr).muscle_len(:,muscleNum)./L0;
-                td(tr).muscle_vel(:,muscleNum) = td(tr).muscle_vel(:,muscleNum)./L0;
+                td(tr).muscle_len(:,muscleIndex) = td(tr).muscle_len(:,muscleIndex)./L0;
+                td(tr).muscle_vel(:,muscleIndex) = td(tr).muscle_vel(:,muscleIndex)./L0;
 
                 %nonlinearize if muscNonlin model
                 if strcmpi(model_aliases,'muscNonlin')
                     if curExp<1
-                        td(tr).muscle_vel(:,muscleNum) = sign(td(tr).muscle_vel(:,muscleNum)).*(abs(td(tr).muscle_vel(:,muscleNum))).^curExp;
+                        td(tr).muscle_vel(:,muscleIndex) = sign(td(tr).muscle_vel(:,muscleIndex)).*(abs(td(tr).muscle_vel(:,muscleIndex))).^curExp;
                     elseif curExp>1
-                        td(tr).muscle_vel(:,muscleNum) = (td(tr).muscle_vel(:,muscleNum)).^curExp;
+                        td(tr).muscle_vel(:,muscleIndex) = (td(tr).muscle_vel(:,muscleIndex)).^curExp;
                     end
                 end
             end
