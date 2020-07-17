@@ -13,6 +13,7 @@ function [multiExp4dArray,multiExp4dNeurEval,columnNames] = nonlinearModelLoop(t
             'pectoralis_inf',...
             'teres_major','tricep_lat','tricep_lon','tricep_sho'};
     exponents = [1];
+    postBumpWindow = false;
     assignParams(who,params); %overwrite params
     
     td = trial_data_cell{1};
@@ -37,12 +38,24 @@ function [multiExp4dArray,multiExp4dNeurEval,columnNames] = nonlinearModelLoop(t
             for filenum = 1:length(trial_data_cell)
                 td = trial_data_cell{filenum};
 
-                % trim to just movements
-                td = trimTD(td,{'idx_movement_on',0},{'idx_movement_on',11});
+                if ~postBumpWindow
+                    % trim to just movements
+                    td = trimTD(td,{'idx_movement_on',0},{'idx_movement_on',11});
+                    [~,td_act] = getTDidx(td,'ctrHoldBump',false);
+                    [~,td_pas] = getTDidx(td,'ctrHoldBump',true);
+                end
+
+                if postBumpWindow
+                    % trim to just post-bump movements for passive movements 
+                    % (and equivalent time window for active reaches)
+                    [~,td_act] = getTDidx(td,'ctrHoldBump',false);
+                    [~,td_pas] = getTDidx(td,'ctrHoldBump',true);
+                    td_pas = trimTD(td_pas,{'idx_bumpTime',bumpDuration+1},{'idx_bumpTime',bumpDuration+1+endofMove-1});
+                    td_act = trimTD(td_act,{'idx_endTime',-1*numel(td_pas(1).pos(:,1))+1},{'idx_endTime',0});
+                    td = cat(2,td_pas,td_act);
+                end
 
                 % check to make sure all neurons fire at least once in each condition (pretty rare that one doesn't)
-                [~,td_act] = getTDidx(td,'ctrHoldBump',false);
-                [~,td_pas] = getTDidx(td,'ctrHoldBump',true);
                 firing_units = mean(getSig(td_act,'S1_spikes'))~=0 & mean(getSig(td_pas,'S1_spikes'))~=0;
                 if any(~firing_units)
                     unit_ids = td(1).([arrayname '_unit_guide']);

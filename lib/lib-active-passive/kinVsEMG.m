@@ -25,6 +25,7 @@ function [emgNeurCondensedTable,emgCondensedNeurEval] = kinVsEMG(muscAvgNeurEval
     emgAct = zeros(1,numel(muscAvgNeurEval(:,1,1)));
     kinPas = zeros(1,numel(muscAvgNeurEval(:,1,1)));
     emgPas = zeros(1,numel(muscAvgNeurEval(:,1,1)));
+    checkMusclesMaster = [];
     unitMuscles = strings(numMuscles,numel(muscAvgNeurEval(:,1,1)));
     kinEmgCondensedTable = zeros(numel(muscAvgNeurEval(:,1,1)),16,numMuscles);
     kinEmgCondensedNeurEval = zeros(numel(muscNeurEval(:,1,1)),16,numMuscles);
@@ -63,6 +64,14 @@ function [emgNeurCondensedTable,emgCondensedNeurEval] = kinVsEMG(muscAvgNeurEval
         elseif bestGroupIdx==4
             checkMuscles = maxEMGPasInd;
         end
+        
+        %save top muscles to decide which one to drop for all muscle model
+        for c=1:numMuscles
+            if ~ismember(checkMuscles(c),checkMusclesMaster)
+                checkMusclesMaster = [checkMusclesMaster checkMuscles(c)];
+            end
+        end
+        
         bestMuscKinAct = reshape(permute(muscAvgNeurEval(n,3,checkMuscles),[3,2,1]),[1,numMuscles]);
         bestMuscEMGAct = reshape(permute(muscAvgNeurEval(n,4,checkMuscles),[3,2,1]),[1,numMuscles]);
         bestMuscKinPas = reshape(permute(muscAvgNeurEval(n,5,checkMuscles),[3,2,1]),[1,numMuscles]);

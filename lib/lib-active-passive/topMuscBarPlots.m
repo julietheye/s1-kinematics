@@ -12,6 +12,10 @@ function topMuscBarPlots(muscAvgNeurEval,params)
     'supraspinatus','teres\_major','teres\_minor','tricep\_lat','tricep\_lon','tricep\_sho'};
     dontWant = []; %REMOVE non-emg muscles from allMuscAvgNeurEval
     numMuscles = 5; %find numMuscles best muscles pR2 for each unit
+    %first model (linear/kin)
+    model1 = 'kin';
+    %second model (nonlinear/emg)
+    model2 = 'kin and emg';
     assignParams(who,params); %overwrite params
     
     %remove dontWant muscles
@@ -46,34 +50,34 @@ function topMuscBarPlots(muscAvgNeurEval,params)
         end
         
         %find best muscles pR2 evaluated in act
-        [maxLinAct, maxLinActInd] = maxk(muscAvgNeurEval(n,3,:),numMuscles);
-        bestMuscLinAct = reshape(permute(maxLinAct,[3,2,1]),[1,numMuscles]);
-        maxLinActInd = reshape(permute(maxLinActInd,[3,2,1]),[1,numMuscles]);
-        [maxNonlinAct, maxNonlinActInd] = maxk(muscAvgNeurEval(n,4,:),numMuscles);
-        bestMuscNonlinAct = reshape(permute(maxNonlinAct,[3,2,1]),[1,numMuscles]);
-        maxNonlinActInd = reshape(permute(maxNonlinActInd,[3,2,1]),[1,numMuscles]);
+        [maxMod1Act, maxMod1ActInd] = maxk(muscAvgNeurEval(n,3,:),numMuscles);
+        bestMuscMod1Act = reshape(permute(maxMod1Act,[3,2,1]),[1,numMuscles]);
+        maxMod1ActInd = reshape(permute(maxMod1ActInd,[3,2,1]),[1,numMuscles]);
+        [maxMod2Act, maxMod2ActInd] = maxk(muscAvgNeurEval(n,4,:),numMuscles);
+        bestMuscMod2Act = reshape(permute(maxMod2Act,[3,2,1]),[1,numMuscles]);
+        maxMod2ActInd = reshape(permute(maxMod2ActInd,[3,2,1]),[1,numMuscles]);
         %find best muscles pR2 evaluated in pas
-        [maxLinPas, maxLinPasInd] = maxk(muscAvgNeurEval(n,5,:),numMuscles);
-        bestMuscLinPas = reshape(permute(maxLinPas,[3,2,1]),[1,numMuscles]);
-        maxLinPasInd = reshape(permute(maxLinPasInd,[3,2,1]),[1,numMuscles]);
-        [maxNonlinPas, maxNonlinPasInd] = maxk(muscAvgNeurEval(n,6,:),numMuscles);
-        bestMuscNonlinPas = reshape(permute(maxNonlinPas,[3,2,1]),[1,numMuscles]);
-        maxNonlinPasInd = reshape(permute(maxNonlinPasInd,[3,2,1]),[1,numMuscles]);
+        [maxMod1Pas, maxMod1PasInd] = maxk(muscAvgNeurEval(n,5,:),numMuscles);
+        bestMuscMod1Pas = reshape(permute(maxMod1Pas,[3,2,1]),[1,numMuscles]);
+        maxMod1PasInd = reshape(permute(maxMod1PasInd,[3,2,1]),[1,numMuscles]);
+        [maxMod2Pas, maxMod2PasInd] = maxk(muscAvgNeurEval(n,6,:),numMuscles);
+        bestMuscMod2Pas = reshape(permute(maxMod2Pas,[3,2,1]),[1,numMuscles]);
+        maxMod2PasInd = reshape(permute(maxMod2PasInd,[3,2,1]),[1,numMuscles]);
         
         %%FOR PLOTTING PR2 OF 5 TOP MUSCLES FOR EACH 4 CATEGORIES
         %order from least to greatest pR2
-        [bestMuscLinAct,linActInd] = sort(bestMuscLinAct,'ascend');
-        maxLinActInd = maxLinActInd(linActInd);
-        [bestMuscNonlinAct,nonlinActInd] = sort(bestMuscNonlinAct,'ascend');
-        maxNonlinActInd = maxNonlinActInd(nonlinActInd);
-        [bestMuscLinPas,linPasInd] = sort(bestMuscLinPas,'ascend');
-        maxLinPasInd = maxLinPasInd(linPasInd);
-        [bestMuscNonlinPas,nonlinPasInd] = sort(bestMuscNonlinPas,'ascend');
-        maxNonlinPasInd = maxNonlinPasInd(nonlinPasInd);
-        y = [bestMuscLinAct bestMuscNonlinAct bestMuscLinPas bestMuscNonlinPas];
+        [bestMuscMod1Act,mod1ActInd] = sort(bestMuscMod1Act,'ascend');
+        maxMod1ActInd = maxMod1ActInd(mod1ActInd);
+        [bestMuscMod2Act,mod2ActInd] = sort(bestMuscMod2Act,'ascend');
+        maxMod2ActInd = maxMod2ActInd(mod2ActInd);
+        [bestMuscMod1Pas,mod1PasInd] = sort(bestMuscMod1Pas,'ascend');
+        maxMod1PasInd = maxMod1PasInd(mod1PasInd);
+        [bestMuscMod2Pas,mod2PasInd] = sort(bestMuscMod2Pas,'ascend');
+        maxMod2PasInd = maxMod2PasInd(mod2PasInd);
+        y = [bestMuscMod1Act bestMuscMod2Act bestMuscMod1Pas bestMuscMod2Pas];
         
         %get muscle names of best muscles
-        bests = [maxLinActInd maxNonlinActInd maxLinPasInd maxNonlinPasInd];
+        bests = [maxMod1ActInd maxMod2ActInd maxMod1PasInd maxMod2PasInd];
         for j=1:numel(bests)
             check = strncmpi(muscleLabels,muscleArray{bests(j)},numel(muscleArray{bests(j)}));
             indexes = find(check);
@@ -87,7 +91,7 @@ function topMuscBarPlots(muscAvgNeurEval,params)
         x = categorical(muscleLabels);
         x = reordercats(x,muscleLabels);
         
-        %plot active linear (dark black)
+        %plot active model 1 (dark black)
         b1 = barh(x(1:numMuscles),y(1:numMuscles),'FaceColor','k','facealpha',1);
         
         hold on
@@ -107,11 +111,11 @@ function topMuscBarPlots(muscAvgNeurEval,params)
         % set the tick labels
         set(gca, 'YTickLabel', ticklabels_new);
         
-        %plot passive linear (dark red)
+        %plot passive model 1 (dark red)
         b2 = barh(x(numMuscles+1:2*numMuscles),y(numMuscles+1:2*numMuscles),'FaceColor','r','facealpha',1);
-        %plot active nonlinear (light black)
+        %plot active model 2 (light black)
         b3 = barh(x(1+2*numMuscles:3*numMuscles),y(1+2*numMuscles:3*numMuscles),'FaceColor','k','facealpha',0.3);
-        %plot passive nonlinear (light red)
+        %plot passive model 2 (light red)
         b4 = barh(x(1+3*numMuscles:4*numMuscles),y(1+3*numMuscles:4*numMuscles),'FaceColor','r','facealpha',0.3);
         
         %axes and legend
@@ -119,16 +123,20 @@ function topMuscBarPlots(muscAvgNeurEval,params)
         set(gca,'XTick',-.5:0.25:0.5)
         title(strcat('Unit ',string(n)));
         sgtitle('Top muscles pR2 per unit');
+        cat1 = strcat('Passive, ',model2);
+        cat2 = strcat('Active, ',model2);
+        cat3 = strcat('Passive, ',model1);
+        cat4 = strcat('Active, ',model1);
         if k==1 || ind==1
-            legend([b4,b3,b2,b1],'Passive, Nonlinear','Active, Nonlinear','Passive, Linear','Active, Linear',...
+            legend([b4,b3,b2,b1],cat1,cat2,cat3,cat4,...
                 'Position',[0 0.8 0.12 0.1])
         end
         suplabel('pR2');
     end
     
-    clear k ind  maxLinAct maxLinActInd bestMuscLinAct
-    clear maxNonlinAct maxNonlinActInd bestMuscNonlinAct
-    clear maxLinPas maxLinPasInd bestMuscLinPas
-    clear maxNonlinPas maxNonlinPasInd bestMuscNonlinPas
+    clear k ind  maxMod1Act maxMod1ActInd bestMuscMod1Act
+    clear maxMod2Act maxMod2ActInd bestMuscMod2Act
+    clear maxMod1Pas maxMod1PasInd bestMuscMod1Pas
+    clear maxMod2Pas maxMod2PasInd bestMuscMod2Pas
     clear bests j check indexes addition muscleLabels x
     clear n

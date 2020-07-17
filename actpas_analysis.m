@@ -8,7 +8,7 @@
     filenames = {'Han_20171201_COactpas_5ms.mat'};
 
     % plotting variables
-%     monkey_names = {'C','Han'};
+	emgNorm = false;
     monkey_names = {'Han'};
     arrayname = 'S1';
     neural_signals = [arrayname '_FR'];
@@ -67,8 +67,10 @@
         end
         
         %normalize emg via range to min and max in session for each muscle
-        for m = 1:numel(td.emg_names)
-            td.emg(:,m) = normalize(td.emg(:,m),'range');
+        if emgNorm
+            for m = 1:numel(td.emg_names)
+                td.emg(:,m) = normalize(td.emg(:,m),'range');
+            end
         end
             
         % prep trial data by getting only rewards and trimming to only movements
@@ -265,16 +267,18 @@
 
 %% Loop through results to pull out relevant info
 
-model_aliases = {'muscLin'};
-models_to_plot = {neural_signals,'muscLin'};
+model_aliases = {'allMuscEMG'};
+models_to_plot = {neural_signals,'allMuscEMG'};
 %model_titles = {'Actual Firing','Muscle Kin'};
 
-%linear model
+%linear kinematics model
+postBumpWindow = false;
 if max(strcmp(model_aliases,{'muscLin'}))==1
     [multiExp4dArray,multiExp4dNeurEval,linColumnNames] = nonlinearModelLoop(trial_data_cell,td_trim,struct(...
                         'arrayname',arrayname,...
                         'model_aliases',{model_aliases},...
-                        'models_to_plot',{models_to_plot}));
+                        'models_to_plot',{models_to_plot},...
+                        'postBumpWindow',postBumpWindow));
 end
 
 %for nonlinear kinematics (normalized) loop
@@ -300,10 +304,39 @@ if max(strcmp(model_aliases,{'muscEMG'}))==1 || max(strcmp(model_aliases,{'EMGon
                         'endofMove',endofMove));
 end
 
-%emg model (emg normalized), NO looping
+%all muscles emg model, NO looping
+if max(strcmp(model_aliases,{'allMuscEMG'}))==1
+    %muscleArray must match emgMuscleArray
+    bumpDuration = 0.125/td(1).bin_size; %(not in this TD, but can get it from CDS)
+    endofMove = 18; %window (bins) between end of bump and end of movement
+    notMusc = 17; %pectoralis inferior (dropping a muscle to get to 20)
+    [allEmgMuscAvgNeurEval,allEmgMuscNeurEval,allMuscColNames] = emgModelAllMusc(trial_data_cell,td_trim,struct(...
+                        'arrayname',arrayname,...
+                        'model_aliases',{model_aliases},...
+                        'models_to_plot',{models_to_plot},...
+                        'bumpDuration',bumpDuration,...
+                        'endofMove',endofMove,...
+                        'notMusc',notMusc));
+end
 
+%all muscles kin model, NO looping
+if max(strcmp(model_aliases,{'allMuscKin'}))==1
+    %muscleArray must match emgMuscleArray
+    postBumpWindow = false;
+    bumpDuration = 0.125/td(1).bin_size; %(not in this TD, but can get it from CDS)
+    endofMove = 18; %window (bins) between end of bump and end of movement
+    notMusc = 17; %pectoralis inferior (dropping a muscle to get to 20)
+    [allKinMuscAvgNeurEval,allKinMuscNeurEval,allKinMuscColNames] = kinModelAllMusc(trial_data_cell,td_trim,struct(...
+                        'arrayname',arrayname,...
+                        'model_aliases',{model_aliases},...
+                        'models_to_plot',{models_to_plot},...
+                        'postBumpWindow',postBumpWindow,...
+                        'bumpDuration',bumpDuration,...
+                        'endofMove',endofMove,...
+                        'notMusc',notMusc));
+end
 
-%% evaluate kin vs emg
+%% combine 3d tables for kin vs emg
 
 % if resulting table from previous section is for one model only,
 % will need to combine with another model's table to compare the two
@@ -344,11 +377,60 @@ end
         j=j+1;
     end
     
+%% combine 2d tables for all muscle kin vs emg
+
+% if resulting table from previous section is for one model only,
+% will need to combine with another model's table to compare the two
+
+%load the saved tables you want (same dimensions, 53x8)
+%load('linearNormalizedOnlyTable.mat')
+%load('emgMuscAvgNeurEval-kinVsEMG.mat')
+
+%load the corresponding neur_eval tables (5300x8)
+
+%two models to be combined
+model1table = allKinMuscAvgNeurEval;
+model1neureval = allKinMuscNeurEval;
+model1vars = allKinMuscColNames;
+model2table = allEmgMuscAvgNeurEval;
+model2neureval = allEmgMuscNeurEval;
+model2vars = allMuscColNames;
+
+combinedTable = zeros(size(model2table,1),16);
+combinedNeurEval = zeros(size(model2neureval,1),16);
+combinedVars = strings(1,16);
+j = 1;
+for i=1:8
+    combinedTable(:,j) = model1table(:,i);
+    combinedNeurEval(:,j) = model1neureval(:,i);
+    combinedVars(1,j) = model1vars(1,i);
+    j=j+1;
+    combinedTable(:,j) = model2table(:,i);
+    combinedNeurEval(:,j) = model2neureval(:,i);
+    combinedVars(1,j) = model2vars(1,i);
+    j=j+1;
+end
+    
 %% evaluate kinematics vs EMG
     muscAvgNeurEval = combinedTable; %set correct table (containing eval from 2 models combined)
     muscNeurEval = combinedNeurEval; %set correct neur eval (for stats)
     columnNames = combinedVars; %set correct vars (16 cols)
     numMuscles = 5; %find numMuscles best muscles pR2 for each unit
+    %also removing pectoralis_inf bec all muscle model needs 20 muscles only!
+    muscAvgNeurEval(:,:,17)=[]; %pec inf is 17 in emg muscle array
+    muscNeurEval(:,:,17)=[];
+    dontWant = [1,2,7,11,12,16,17,20,22,27,29,30,31,32,33,34,36]; %REMOVE non-emg muscles and pec inf (29) from muscle list in topMusc function
+    model1 = 'kinematics';
+    model2 = 'kin and emg';
+    
+    %bar plots showing top 5 muscles per unit per category
+    topMuscBarPlots(muscAvgNeurEval,struct(...
+                        'dontWant',dontWant,...
+                        'numMuscles',numMuscles,...
+                        'model1',model1,...
+                        'model2',model2));
+
+    
     doPlots = true; %scatter plots, stats on model comparisons
     %for stats
     num_repeats = 20;
@@ -367,57 +449,19 @@ end
                             
 %save condensedTable, condensedNeurEval, and combinedVars
 
-%% evaluate lin vs nonlinear
-
-% if resulting table from previous section is for one model only,
-% will need to combine with another model's table to compare the two
-
-    %load the saved tables you want (same dimensions, 53x8x21xexponents)
-    %load('linearNormalizedOnlyTable.mat')
-    %load('multiExp4dArray_052820.mat')
-    multiExp4dArray2Models = zeros(size(multiExp4dArray,1),16,...
-                                    size(multiExp4dArray,3),size(multiExp4dArray,4));
-    for d=1:size(multiExp4dArray,4)
-        combinedTable = zeros(size(multiExp4dArray,1),16,size(multiExp4dArray,3));
-        j = 1;
-        for i=1:8
-            combinedTable(:,j,:) = linearMuscleTable(:,i,:);
-            j=j+1;
-            combinedTable(:,j,:) = multiExp4dArray(:,i,:,d);
-            j=j+1;
-        end
-        multiExp4dArray2Models(:,:,:,d) = combinedTable;
-    end
-
-% make necessary changes to table
-    dontWant = [1,2,7,11,12,16,17,20,22,27,30,31,32,33,34,36]; %REMOVE non-emg muscles from allMuscAvgNeurEval
-    multiExp4dArray2ModelsMod = multiExp4dArray2Models;
-    multiExp4dArray2ModelsMod(:,:,dontWant,:) = [];
-    
-% show top muscles pR2 per category bar plots (pick one exponent at a time)
-    numMuscles = 5; %find numMuscles best muscles pR2 for each unit
-    expInd = 1;
-    muscAvgNeurEval = multiExp4dArray2ModelsMod(:,:,:,expInd);
-
-    %bar plots showing top 5 muscles per unit per category (for specified exponent)
-    topMuscBarPlots(muscAvgNeurEval,struct(...
-                        'dontWant',dontWant,...
-                        'numMuscles',numMuscles));
-
-% evaluate kinematics vs EMG  
-    multiExpArrayInput = multiExp4dArray2ModelsMod;
-    numMuscles = 5; %find numMuscles best muscles pR2 for each unit
-    doPlots = true; %scatter plots, no stats
-    
-    linVsNonlin(multiExpArrayInput,columnNames,struct(...
-                    'numMuscles',numMuscles,...
-                    'doPlots',doPlots));
-
 %% make plots for condensed neurEval tables w stats!
 
-model_pairs = {'muscLin','muscEMG'};
-models_to_plot = {neural_signals,'muscLin','muscEMG'};
-model_titles = {'Muscle Kinematics','Muscle Kin and EMG'};
+%run previous section first (kinVsEMG function) to get condensed tables
+%OR set the following
+emgNeurCondensedTable = combinedTable;
+emgCondensedNeurEval = combinedNeurEval;
+% combinedVars = combinedVars;
+
+model_pairs = {'allMuscKin','allMuscEMG'};
+models_to_plot = {neural_signals,'allMuscKin','allMuscEMG'};
+model_titles = {'All Muscle Kinematics','All Muscle Kin and EMG'};
+% plotLims = [-0.4 0.6];
+plotLims = [-100 0.6];
 
 % compare pR2 of handelbow vs ext
 figure('defaultaxesfontsize',18)
@@ -426,10 +470,10 @@ for pairnum = 1:size(model_pairs,1)
         % set subplot...
         subplot(size(model_pairs,1),length(monkey_names),...
             (pairnum-1)*length(monkey_names)+monkeynum)
-        plot([-0.4 0.6],[-0.4 0.6],'k--','linewidth',0.5)
+        plot(plotLims,plotLims,'k--','linewidth',0.5)
         hold on
-        plot([0 0],[-0.4 0.6],'k-','linewidth',0.5)
-        plot([-0.4 0.6],[0 0],'k-','linewidth',0.5)
+        plot([0 0],plotLims,'k-','linewidth',0.5)
+        plot(plotLims,[0 0],'k-','linewidth',0.5)
 
 %             % get sessions
 %             [~,monkey_evals] = getNTidx(neuron_eval,'monkey',monkey_names{monkeynum});
@@ -457,14 +501,14 @@ for pairnum = 1:size(model_pairs,1)
             idx1 = strcmp(colNames,strcat(model_pairs{1},'_eval'));
             idx2 = strcmp(colNames,strcat(model_pairs{2},'_eval'));
             scatterlims(...
-                [-0.4 0.6],...
-                [-0.4 0.6],...
+                plotLims,...
+                plotLims,...
                 avg_pR2(no_winner,idx1),...
                 avg_pR2(no_winner,idx2),...
                 [],session_colors(sessionnum,:))
             scatterlims(...
-                [-0.4 0.6],...
-                [-0.4 0.6],...
+                plotLims,...
+                plotLims,...
                 avg_pR2(~no_winner,idx1),...
                 avg_pR2(~no_winner,idx2),...
                 [],session_colors(sessionnum,:),'filled')
@@ -483,6 +527,8 @@ for pairnum = 1:size(model_pairs,1)
 end
 
 %% Plot within condition vs across condition pR2 for each neuron in all sessions
+
+%run previous section first (kinVsEMG function) to get condensed tables
 conds = {'act','pas'};
 model_pairs = {'muscLin','muscEMG'};
 models_to_plot = {neural_signals,'muscLin','muscEMG'};
@@ -558,7 +604,56 @@ for modelnum = 2:length(models_to_plot)
     % suptitle('Full pR^2 vs within condition pR^2')
 end
 
+
+%% evaluate lin vs nonlinear
+
+% if resulting table from previous section is for one model only,
+% will need to combine with another model's table to compare the two
+
+    %load the saved tables you want (same dimensions, 53x8x21xexponents)
+    %load('linearNormalizedOnlyTable.mat')
+    %load('multiExp4dArray_052820.mat')
+    multiExp4dArray2Models = zeros(size(multiExp4dArray,1),16,...
+                                    size(multiExp4dArray,3),size(multiExp4dArray,4));
+    for d=1:size(multiExp4dArray,4)
+        combinedTable = zeros(size(multiExp4dArray,1),16,size(multiExp4dArray,3));
+        j = 1;
+        for i=1:8
+            combinedTable(:,j,:) = linearMuscleTable(:,i,:);
+            j=j+1;
+            combinedTable(:,j,:) = multiExp4dArray(:,i,:,d);
+            j=j+1;
+        end
+        multiExp4dArray2Models(:,:,:,d) = combinedTable;
+    end
+
+% make necessary changes to table
+    dontWant = [1,2,7,11,12,16,17,20,22,27,30,31,32,33,34,36]; %REMOVE non-emg muscles from allMuscAvgNeurEval
+    multiExp4dArray2ModelsMod = multiExp4dArray2Models;
+    multiExp4dArray2ModelsMod(:,:,dontWant,:) = [];
     
+% show top muscles pR2 per category bar plots (pick one exponent at a time)
+    numMuscles = 5; %find numMuscles best muscles pR2 for each unit
+    model1 = 'linear';
+    model2 = 'nonlinear';
+    expInd = 1;
+    muscAvgNeurEval = multiExp4dArray2ModelsMod(:,:,:,expInd);
+
+    %bar plots showing top 5 muscles per unit per category (for specified exponent)
+    topMuscBarPlots(muscAvgNeurEval,struct(...
+                        'dontWant',dontWant,...
+                        'numMuscles',numMuscles,...
+                        'model1',model1,...
+                        'model2',model2));
+
+% evaluate lin vs nonlin  
+    multiExpArrayInput = multiExp4dArray2ModelsMod;
+    numMuscles = 5; %find numMuscles best muscles pR2 for each unit
+    doPlots = true; %scatter plots, no stats
+    
+    linVsNonlin(multiExpArrayInput,columnNames,struct(...
+                    'numMuscles',numMuscles,...
+                    'doPlots',doPlots));
     
 %% make plots
     % plot separability of each neuron and save CIs into avg_neuron_eval
