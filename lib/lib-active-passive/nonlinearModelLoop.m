@@ -14,6 +14,9 @@ function [multiExp4dArray,multiExp4dNeurEval,columnNames] = nonlinearModelLoop(t
             'teres_major','tricep_lat','tricep_lon','tricep_sho'};
     exponents = [1];
     postBumpWindow = false;
+    bumpDuration = 0.125/0.005; %not in this TD, but can get it from CDS
+    %found in actPasAnalysis JH
+    endofMove = 18; %window (bins) between end of bump and end of movement
     assignParams(who,params); %overwrite params
     
     td = trial_data_cell{1};

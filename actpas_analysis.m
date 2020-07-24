@@ -267,18 +267,22 @@
 
 %% Loop through results to pull out relevant info
 
-model_aliases = {'allMuscEMG'};
-models_to_plot = {neural_signals,'allMuscEMG'};
+model_aliases = {'muscNonlin'};
+models_to_plot = {neural_signals,'muscNonlin'};
 %model_titles = {'Actual Firing','Muscle Kin'};
 
 %linear kinematics model
-postBumpWindow = false;
+postBumpWindow = true;
+bumpDuration = 0.125/td(1).bin_size; %(not in this TD, but can get it from CDS)
+endofMove = 18; %window (bins) between end of bump and end of movement
 if max(strcmp(model_aliases,{'muscLin'}))==1
     [multiExp4dArray,multiExp4dNeurEval,linColumnNames] = nonlinearModelLoop(trial_data_cell,td_trim,struct(...
                         'arrayname',arrayname,...
                         'model_aliases',{model_aliases},...
                         'models_to_plot',{models_to_plot},...
-                        'postBumpWindow',postBumpWindow));
+                        'postBumpWindow',postBumpWindow,...
+                        'bumpDuration',bumpDuration,...
+                        'endofMove',endofMove));
 end
 
 %for nonlinear kinematics (normalized) loop
@@ -453,15 +457,15 @@ end
 
 %run previous section first (kinVsEMG function) to get condensed tables
 %OR set the following
-emgNeurCondensedTable = combinedTable;
-emgCondensedNeurEval = combinedNeurEval;
+% emgNeurCondensedTable = combinedTable;
+% emgCondensedNeurEval = combinedNeurEval;
 % combinedVars = combinedVars;
 
-model_pairs = {'allMuscKin','allMuscEMG'};
-models_to_plot = {neural_signals,'allMuscKin','allMuscEMG'};
-model_titles = {'All Muscle Kinematics','All Muscle Kin and EMG'};
+model_pairs = {'muscLin','muscEMG'};
+models_to_plot = {neural_signals,'muscLin','muscEMG'};
+model_titles = {'Muscle Kinematics','Muscle Kin and EMG'};
 % plotLims = [-0.4 0.6];
-plotLims = [-100 0.6];
+plotLims = [-0.4 0.6];
 
 % compare pR2 of handelbow vs ext
 figure('defaultaxesfontsize',18)
@@ -654,6 +658,22 @@ end
     linVsNonlin(multiExpArrayInput,columnNames,struct(...
                     'numMuscles',numMuscles,...
                     'doPlots',doPlots));
+                
+%     doPlots = true; %scatter plots, stats on model comparisons
+%     %for stats
+%     num_repeats = 20;
+%     num_folds = 5;
+%     model_pairs = {'muscLin','muscEMG'};
+%     models_to_plot = {neural_signals,'muscLin','muscEMG'};
+%     
+% 
+%     [nonlinNeurCondensedTable,nonlinCondensedNeurEval] = linVsNonlin(muscAvgNeurEval,muscNeurEval,columnNames,struct(...
+%                                 'numMuscles',numMuscles,...
+%                                 'doPlots',doPlots,...
+%                                 'num_repeats',num_repeats,...
+%                                 'num_folds',num_folds,...
+%                                 'model_pairs',{model_pairs},...
+%                                 'models_to_plot',{models_to_plot}));
     
 %% make plots
     % plot separability of each neuron and save CIs into avg_neuron_eval
